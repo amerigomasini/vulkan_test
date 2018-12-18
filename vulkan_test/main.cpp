@@ -89,6 +89,10 @@ private:
 	VkQueue graphicsQueue;									//implicitly destroyed with logical device
 	VkQueue presentQueue;									//implicitly destroyed with logical device
 	VkSwapchainKHR swapChain;
+	std::vector<VkImage> swapChainImages;					//implicitly destroyed with the swap chain
+	VkFormat swapChainImageFormat;
+	VkExtent2D swapChainExtent;
+	std::vector<VkImageView> swapChainImageViews;
 
 	struct QueueFamilyIndices
 	{
@@ -330,7 +334,9 @@ private:
 
 		VkSurfaceFormatKHR surfaceFormat = chooseSwapSurfaceFormat(swapChainSupport.formats);
 		VkPresentModeKHR presentMode = chooseSwapPresentMode(swapChainSupport.presentModes);
-		VkExtent2D extent = chooseSwapExtent(swapChainSupport.capabilities);
+		swapChainExtent = chooseSwapExtent(swapChainSupport.capabilities);
+
+		swapChainImageFormat = surfaceFormat.format;
 
 		//choose how many images to store in the swap chain. we add one to use triple buffering
 		uint32_t imageCount = swapChainSupport.capabilities.minImageCount + 1;
@@ -343,7 +349,7 @@ private:
 		createInfo.minImageCount = imageCount;
 		createInfo.imageFormat = surfaceFormat.format;
 		createInfo.imageColorSpace = surfaceFormat.colorSpace;
-		createInfo.imageExtent = extent;
+		createInfo.imageExtent = swapChainExtent;
 		createInfo.presentMode = presentMode;
 		createInfo.clipped = VK_TRUE;									//do not care about pixelx obscured by other windows
 		createInfo.imageArrayLayers = 1;								//always 1 unless developing a stereo 3D app
@@ -374,6 +380,40 @@ private:
 
 		if (vkCreateSwapchainKHR(device, &createInfo, nullptr, &swapChain) != VK_SUCCESS)
 			throw std::runtime_error("failed to create swap chain");
+
+		vkGetSwapchainImagesKHR(device, swapChain, &imageCount, nullptr);
+		swapChainImages.resize(imageCount);
+		vkGetSwapchainImagesKHR(device, swapChain, &imageCount, swapChainImages.data());
+	}
+
+
+
+	//Image Views
+	void createImageViews()
+	{
+		swapChainImageViews.resize(swapChainImages.size());
+
+		for (size_t i = 0; i < swapChainImageViews.size(); ++i)
+		{
+			VkImageViewCreateInfo createInfo = {};
+			createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+			createInfo.image = swapChainImages[i];
+			createInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+			createInfo.format = swapChainImageFormat;
+			createInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
+			createInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
+			createInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
+			createInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
+
+			createInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+			createInfo.subresourceRange.baseMipLevel = 0;
+			createInfo.subresourceRange.levelCount = 1;
+			createInfo.subresourceRange.baseArrayLayer = 0;
+			createInfo.subresourceRange.layerCount = 1;			//multiple layers are needed for stereo 3D apps
+
+			if (vkCreateImageView(device, &createInfo, nullptr, &swapChainImageViews[i]) != VK_SUCCESS)
+				throw std::runtime_error("failed to create image view");
+		}
 	}
 
 
@@ -550,6 +590,13 @@ private:
 
 
 
+	//Graphics Pipeline
+	void createGraphicsPipeline()
+	{
+
+	}
+
+
 
 	void initWindow()
 	{
@@ -582,6 +629,12 @@ private:
 
 		//6. create a swap chain
 		createSwapChain();
+
+		//7. create image views for each image in the swap chain
+		createImageViews();
+
+		//8. create the pipeline
+		createGraphicsPipeline();
 	}
 
 	void mainLoop()
@@ -594,6 +647,9 @@ private:
 
 	void cleanup()
 	{
+		for (auto imageView : swapChainImageViews)
+			vkDestroyImageView(device, imageView, nullptr);
+
 		vkDestroySwapchainKHR(device, swapChain, nullptr);
 		vkDestroyDevice(device, nullptr);
 
