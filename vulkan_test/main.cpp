@@ -6,6 +6,7 @@
 #include <functional>
 #include <cstdlib>
 #include <optional>
+#include <fstream>
 
 #include <algorithm>
 #include <sstream>
@@ -67,6 +68,23 @@ void DestroyDebugUtilsMessengerEXT(
 		func(instance, callback, pAllocator);
 }
 
+static std::vector<char> readFile(std::string const & filename)
+{
+	std::ifstream file(filename, std::ios::ate | std::ios::binary);
+
+	if (!file.is_open())
+		throw std::runtime_error("failed to open file");
+
+	size_t fileSize = (size_t)file.tellg();
+	std::vector<char> buffer(fileSize);
+
+	file.seekg(0);
+	file.read(buffer.data(), fileSize);
+
+	file.close();
+
+	return buffer;
+}
 
 class HelloTriangleApplication
 {
@@ -93,6 +111,9 @@ private:
 	VkFormat swapChainImageFormat;
 	VkExtent2D swapChainExtent;
 	std::vector<VkImageView> swapChainImageViews;
+	VkRenderPass renderPass;
+	VkPipelineLayout pipelineLayout;
+	VkPipeline graphicsPipeline;
 
 	struct QueueFamilyIndices
 	{
@@ -247,174 +268,6 @@ private:
 			throw std::runtime_error("failed to create window surface");
 	}
 
-
-
-	//Swap Chain
-	SwapChainSupportDetails querySwapChainSupport(VkPhysicalDevice device)
-	{
-		SwapChainSupportDetails details;
-
-		vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device, surface, &details.capabilities);
-
-		uint32_t formatCount;
-		vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface, &formatCount, nullptr);
-		if (formatCount > 0)
-		{ 
-			details.formats.resize(formatCount);
-			vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface, &formatCount, details.formats.data());
-		}
-
-		uint32_t presentModeCount;
-		vkGetPhysicalDeviceSurfacePresentModesKHR(device, surface, &presentModeCount, nullptr);
-		if (presentModeCount > 0)
-		{
-			details.presentModes.resize(presentModeCount);
-			vkGetPhysicalDeviceSurfacePresentModesKHR(device, surface, &presentModeCount, details.presentModes.data());
-		}
-		
-		return details;
-	}
-
-	VkSurfaceFormatKHR chooseSwapSurfaceFormat(std::vector<VkSurfaceFormatKHR> const & availableFormats)
-	{
-		//if the surface has no preferred format, we choose the one we like the most
-		if (availableFormats.size() == 1 && availableFormats[0].format == VK_FORMAT_UNDEFINED)
-			return { VK_FORMAT_B8G8R8_UNORM, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR };
-
-		//otherwise see if our preferred format is available
-		for (auto const & availableFormat : availableFormats)
-		{
-			if (availableFormat.format == VK_FORMAT_B8G8R8_UNORM && availableFormat.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR)
-				return availableFormat;
-		}
-
-		//otherwise just pick one
-		return availableFormats[0];
-	}
-
-	VkPresentModeKHR chooseSwapPresentMode(std::vector<VkPresentModeKHR> const & availablePresentModes)
-	{
-		VkPresentModeKHR bestMode = VK_PRESENT_MODE_FIFO_KHR;
-
-		//check if triple-buffering is available, and if so pick it
-		for (auto const & availablePresentMode : availablePresentModes)
-		{
-			if (availablePresentMode == VK_PRESENT_MODE_MAILBOX_KHR)
-				return availablePresentMode;
-			else if (availablePresentMode == VK_PRESENT_MODE_IMMEDIATE_KHR)
-				bestMode = availablePresentMode;
-		}
-
-		return bestMode;
-	}
-
-	VkExtent2D chooseSwapExtent(VkSurfaceCapabilitiesKHR const & capabilities)
-	{
-		//the resolution of the swap chain images
-
-		//usually we just match the window size
-		if (capabilities.currentExtent.width != std::numeric_limits<uint32_t>::max())
-			return capabilities.currentExtent;
-		else
-		{
-			//if the value is set to std::numeric_limits<uint32_t>::max() it means that our resolution can be anywhere between 
-			//minImageExtent and maxImageExtent, as long as it is within the window limits
-			VkExtent2D actualExtent = { WIDTH, HEIGHT };
-
-			actualExtent.width = std::max(capabilities.minImageExtent.width, std::min(capabilities.maxImageExtent.width, actualExtent.width));
-			actualExtent.height= std::max(capabilities.minImageExtent.height, std::min(capabilities.maxImageExtent.height, actualExtent.height));
-
-			return actualExtent;
-		}
-	}
-
-	void createSwapChain()
-	{
-		SwapChainSupportDetails swapChainSupport = querySwapChainSupport(physicalDevice);
-
-		VkSurfaceFormatKHR surfaceFormat = chooseSwapSurfaceFormat(swapChainSupport.formats);
-		VkPresentModeKHR presentMode = chooseSwapPresentMode(swapChainSupport.presentModes);
-		swapChainExtent = chooseSwapExtent(swapChainSupport.capabilities);
-
-		swapChainImageFormat = surfaceFormat.format;
-
-		//choose how many images to store in the swap chain. we add one to use triple buffering
-		uint32_t imageCount = swapChainSupport.capabilities.minImageCount + 1;
-		if (swapChainSupport.capabilities.maxImageCount > 0 && imageCount > swapChainSupport.capabilities.maxImageCount)
-			imageCount = swapChainSupport.capabilities.maxImageCount;
-
-		VkSwapchainCreateInfoKHR createInfo = {};
-		createInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
-		createInfo.surface = surface;
-		createInfo.minImageCount = imageCount;
-		createInfo.imageFormat = surfaceFormat.format;
-		createInfo.imageColorSpace = surfaceFormat.colorSpace;
-		createInfo.imageExtent = swapChainExtent;
-		createInfo.presentMode = presentMode;
-		createInfo.clipped = VK_TRUE;									//do not care about pixelx obscured by other windows
-		createInfo.imageArrayLayers = 1;								//always 1 unless developing a stereo 3D app
-		//render directly to images. Change if we need to render images to a separate image first to perform post-processing
-		createInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
-		createInfo.oldSwapchain = VK_NULL_HANDLE;
-
-		QueueFamilyIndices indices = findQueueFamilies(physicalDevice);
-		uint32_t queueFamilyIndices[] = { indices.graphicsFamily.value(), indices.presentFamily.value() };
-		if (indices.graphicsFamily != indices.presentFamily)
-		{
-			createInfo.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
-			createInfo.queueFamilyIndexCount = 2;
-			createInfo.pQueueFamilyIndices = queueFamilyIndices;
-		}
-		else
-		{
-			createInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;		//best performance
-			createInfo.queueFamilyIndexCount = 1;
-			createInfo.pQueueFamilyIndices = nullptr;
-		}
-
-		//change to an enum value to pre-transforms images in the swap chain (ex. 90 degree rotation)
-		createInfo.preTransform = swapChainSupport.capabilities.currentTransform;
-
-		//setting for blending with other windows in the window system. should almost always be ignored.
-		createInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
-
-		if (vkCreateSwapchainKHR(device, &createInfo, nullptr, &swapChain) != VK_SUCCESS)
-			throw std::runtime_error("failed to create swap chain");
-
-		vkGetSwapchainImagesKHR(device, swapChain, &imageCount, nullptr);
-		swapChainImages.resize(imageCount);
-		vkGetSwapchainImagesKHR(device, swapChain, &imageCount, swapChainImages.data());
-	}
-
-
-
-	//Image Views
-	void createImageViews()
-	{
-		swapChainImageViews.resize(swapChainImages.size());
-
-		for (size_t i = 0; i < swapChainImageViews.size(); ++i)
-		{
-			VkImageViewCreateInfo createInfo = {};
-			createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-			createInfo.image = swapChainImages[i];
-			createInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-			createInfo.format = swapChainImageFormat;
-			createInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
-			createInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
-			createInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
-			createInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
-
-			createInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-			createInfo.subresourceRange.baseMipLevel = 0;
-			createInfo.subresourceRange.levelCount = 1;
-			createInfo.subresourceRange.baseArrayLayer = 0;
-			createInfo.subresourceRange.layerCount = 1;			//multiple layers are needed for stereo 3D apps
-
-			if (vkCreateImageView(device, &createInfo, nullptr, &swapChainImageViews[i]) != VK_SUCCESS)
-				throw std::runtime_error("failed to create image view");
-		}
-	}
 
 
 	//Physical Device
@@ -589,11 +442,443 @@ private:
 
 
 
+	//Swap Chain
+	SwapChainSupportDetails querySwapChainSupport(VkPhysicalDevice device)
+	{
+		SwapChainSupportDetails details;
+
+		vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device, surface, &details.capabilities);
+
+		uint32_t formatCount;
+		vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface, &formatCount, nullptr);
+		if (formatCount > 0)
+		{ 
+			details.formats.resize(formatCount);
+			vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface, &formatCount, details.formats.data());
+		}
+
+		uint32_t presentModeCount;
+		vkGetPhysicalDeviceSurfacePresentModesKHR(device, surface, &presentModeCount, nullptr);
+		if (presentModeCount > 0)
+		{
+			details.presentModes.resize(presentModeCount);
+			vkGetPhysicalDeviceSurfacePresentModesKHR(device, surface, &presentModeCount, details.presentModes.data());
+		}
+		
+		return details;
+	}
+
+	VkSurfaceFormatKHR chooseSwapSurfaceFormat(std::vector<VkSurfaceFormatKHR> const & availableFormats)
+	{
+		//if the surface has no preferred format, we choose the one we like the most
+		if (availableFormats.size() == 1 && availableFormats[0].format == VK_FORMAT_UNDEFINED)
+			return { VK_FORMAT_B8G8R8_UNORM, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR };
+
+		//otherwise see if our preferred format is available
+		for (auto const & availableFormat : availableFormats)
+		{
+			if (availableFormat.format == VK_FORMAT_B8G8R8_UNORM && availableFormat.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR)
+				return availableFormat;
+		}
+
+		//otherwise just pick one
+		return availableFormats[0];
+	}
+
+	VkPresentModeKHR chooseSwapPresentMode(std::vector<VkPresentModeKHR> const & availablePresentModes)
+	{
+		VkPresentModeKHR bestMode = VK_PRESENT_MODE_FIFO_KHR;
+
+		//check if triple-buffering is available, and if so pick it
+		for (auto const & availablePresentMode : availablePresentModes)
+		{
+			if (availablePresentMode == VK_PRESENT_MODE_MAILBOX_KHR)
+				return availablePresentMode;
+			else if (availablePresentMode == VK_PRESENT_MODE_IMMEDIATE_KHR)
+				bestMode = availablePresentMode;
+		}
+
+		return bestMode;
+	}
+
+	VkExtent2D chooseSwapExtent(VkSurfaceCapabilitiesKHR const & capabilities)
+	{
+		//the resolution of the swap chain images
+
+		//usually we just match the window size
+		if (capabilities.currentExtent.width != std::numeric_limits<uint32_t>::max())
+			return capabilities.currentExtent;
+		else
+		{
+			//if the value is set to std::numeric_limits<uint32_t>::max() it means that our resolution can be anywhere between 
+			//minImageExtent and maxImageExtent, as long as it is within the window limits
+			VkExtent2D actualExtent = { WIDTH, HEIGHT };
+
+			actualExtent.width = std::max(capabilities.minImageExtent.width, std::min(capabilities.maxImageExtent.width, actualExtent.width));
+			actualExtent.height= std::max(capabilities.minImageExtent.height, std::min(capabilities.maxImageExtent.height, actualExtent.height));
+
+			return actualExtent;
+		}
+	}
+
+	void createSwapChain()
+	{
+		SwapChainSupportDetails swapChainSupport = querySwapChainSupport(physicalDevice);
+
+		VkSurfaceFormatKHR surfaceFormat = chooseSwapSurfaceFormat(swapChainSupport.formats);
+		VkPresentModeKHR presentMode = chooseSwapPresentMode(swapChainSupport.presentModes);
+		swapChainExtent = chooseSwapExtent(swapChainSupport.capabilities);
+
+		swapChainImageFormat = surfaceFormat.format;
+
+		//choose how many images to store in the swap chain. we add one to use triple buffering
+		uint32_t imageCount = swapChainSupport.capabilities.minImageCount + 1;
+		if (swapChainSupport.capabilities.maxImageCount > 0 && imageCount > swapChainSupport.capabilities.maxImageCount)
+			imageCount = swapChainSupport.capabilities.maxImageCount;
+
+		VkSwapchainCreateInfoKHR createInfo = {};
+		createInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
+		createInfo.surface = surface;
+		createInfo.minImageCount = imageCount;
+		createInfo.imageFormat = surfaceFormat.format;
+		createInfo.imageColorSpace = surfaceFormat.colorSpace;
+		createInfo.imageExtent = swapChainExtent;
+		createInfo.presentMode = presentMode;
+		createInfo.clipped = VK_TRUE;									//do not care about pixelx obscured by other windows
+		createInfo.imageArrayLayers = 1;								//always 1 unless developing a stereo 3D app
+		//render directly to images. Change if we need to render images to a separate image first to perform post-processing
+		createInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+		createInfo.oldSwapchain = VK_NULL_HANDLE;
+
+		QueueFamilyIndices indices = findQueueFamilies(physicalDevice);
+		uint32_t queueFamilyIndices[] = { indices.graphicsFamily.value(), indices.presentFamily.value() };
+		if (indices.graphicsFamily != indices.presentFamily)
+		{
+			createInfo.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
+			createInfo.queueFamilyIndexCount = 2;
+			createInfo.pQueueFamilyIndices = queueFamilyIndices;
+		}
+		else
+		{
+			createInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;		//best performance
+			createInfo.queueFamilyIndexCount = 1;
+			createInfo.pQueueFamilyIndices = nullptr;
+		}
+
+		//change to an enum value to pre-transforms images in the swap chain (ex. 90 degree rotation)
+		createInfo.preTransform = swapChainSupport.capabilities.currentTransform;
+
+		//setting for blending with other windows in the window system. should almost always be ignored.
+		createInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+
+		if (vkCreateSwapchainKHR(device, &createInfo, nullptr, &swapChain) != VK_SUCCESS)
+			throw std::runtime_error("failed to create swap chain");
+
+		vkGetSwapchainImagesKHR(device, swapChain, &imageCount, nullptr);
+		swapChainImages.resize(imageCount);
+		vkGetSwapchainImagesKHR(device, swapChain, &imageCount, swapChainImages.data());
+	}
+
+
+
+
+	//Image Views
+	void createImageViews()
+	{
+		swapChainImageViews.resize(swapChainImages.size());
+
+		for (size_t i = 0; i < swapChainImageViews.size(); ++i)
+		{
+			VkImageViewCreateInfo createInfo = {};
+			createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+			createInfo.image = swapChainImages[i];
+			createInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+			createInfo.format = swapChainImageFormat;
+			createInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
+			createInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
+			createInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
+			createInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
+
+			createInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+			createInfo.subresourceRange.baseMipLevel = 0;
+			createInfo.subresourceRange.levelCount = 1;
+			createInfo.subresourceRange.baseArrayLayer = 0;
+			createInfo.subresourceRange.layerCount = 1;			//multiple layers are needed for stereo 3D apps
+
+			if (vkCreateImageView(device, &createInfo, nullptr, &swapChainImageViews[i]) != VK_SUCCESS)
+				throw std::runtime_error("failed to create image view");
+		}
+	}
+
+
+
+
+	//Render Passes
+	void createRenderPass()
+	{
+		VkAttachmentDescription colorAttachment = {};
+		colorAttachment.format = swapChainImageFormat;			//should match swap chain settings
+		colorAttachment.samples = VK_SAMPLE_COUNT_1_BIT;		//should match multi-sampling settings
+		colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;	//what to do with color and depth data in the buffer before rendering
+		colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;	//what to do with color and depth data in the buffer after rendering
+		colorAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;	//stencil buffer will be undefined. OK because we are not using it
+		colorAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+
+		//images need to be transitioned to specific layouts, based on what we plan to do with them
+		colorAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;		//do not care about layout before render begins
+		colorAttachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;	//after render is done the layout should be one that allows the image to be presented
+
+
+		//each render pass is made up of sub-passes
+		//for example, an initial render can be followed up by post-processing
+		//each subpass references an attachment description
+		VkAttachmentReference colorAttachmentRef = {};
+		//index in the array of color attachments to reference
+		colorAttachmentRef.attachment = 0;
+		//layout to use for this subpass
+		colorAttachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
+
+		VkSubpassDescription subpass = {};
+		subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;		//compute sub-passes might be supported in the future
+		subpass.colorAttachmentCount = 1;
+		//The index of attachments in this array is referenced in the fragment shader
+		//layout(location = 0) out vec4 outColor
+		subpass.pColorAttachments = &colorAttachmentRef;
+
+		VkRenderPassCreateInfo renderPassInfo = {};
+		renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+		renderPassInfo.subpassCount = 1;
+		renderPassInfo.pSubpasses = &subpass;
+		renderPassInfo.attachmentCount = 1;
+		renderPassInfo.pAttachments = &colorAttachment;
+		
+		if (vkCreateRenderPass(device, &renderPassInfo, nullptr, &renderPass) != VK_SUCCESS)
+			throw std::runtime_error("failed to create render pass");
+
+	}
+
+
+
 
 	//Graphics Pipeline
 	void createGraphicsPipeline()
 	{
+		auto vertexShaderCode = readFile("shaders/vert.spv");
+		auto fragmentShaderCode = readFile("shaders/frag.spv");
 
+		VkShaderModule vertShaderModule = createShaderModule(vertexShaderCode);
+		VkShaderModule fragShaderModule = createShaderModule(fragmentShaderCode);
+
+
+
+		//vertex shader
+		VkPipelineShaderStageCreateInfo vertShaderStageInfo = {};
+		vertShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+		vertShaderStageInfo.stage = VK_SHADER_STAGE_VERTEX_BIT;		//where to bind in the pipeline
+		vertShaderStageInfo.module = vertShaderModule;
+
+		//function to invoke.
+		//it is possible to combine different shaders of the same type into a single module and then change
+		//which function needs to be invoked based on the desired behavior
+		vertShaderStageInfo.pName = "main";
+
+		//Used to set values of shader variables before the rendering stage.
+		//it speeds things up
+		vertShaderStageInfo.pSpecializationInfo = nullptr;
+
+
+
+
+		//fragment shader
+		VkPipelineShaderStageCreateInfo fragShaderStageInfo = {};
+		fragShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+		fragShaderStageInfo.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+		fragShaderStageInfo.module = fragShaderModule;
+		fragShaderStageInfo.pName = "main";
+
+		VkPipelineShaderStageCreateInfo shaderStages[] = { vertShaderStageInfo, fragShaderStageInfo };
+
+
+
+		//Vertex Input
+		//Describes format of vertex data passed to Vertex Shader
+		VkPipelineVertexInputStateCreateInfo vertexInputInfo = {};
+		vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+		vertexInputInfo.vertexAttributeDescriptionCount = 0;	//Spacing between data, whether it is per-vertex or per-instance
+		vertexInputInfo.pVertexBindingDescriptions = nullptr;
+		vertexInputInfo.vertexAttributeDescriptionCount = 0;	//Descriptors of data passed to Vertex Shader
+		vertexInputInfo.pVertexAttributeDescriptions = nullptr;
+
+
+
+
+		//Input Assembly
+		//Describes what kind of geometry will be drawn, and if primitive restart is enabled
+		//possible geometry values: point list, line list, line strip, triangle list, triangle strip
+		//primitive restart is used to break up lines and triangles in the strip topologies
+		VkPipelineInputAssemblyStateCreateInfo inputAssembly = {};
+		inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+		inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+		inputAssembly.primitiveRestartEnable = VK_FALSE;
+
+
+
+
+		//Viewport & Scissors
+		//region of the framebuffer that will be rendered to
+		//scissors can be used to filter out fragments at the rasterizer stage based on a rectangle
+		VkViewport viewport = {};
+		viewport.x = 0.0f;
+		viewport.y = 0.0f;
+		viewport.width = (float)swapChainExtent.width;		//size of swapchain might be different than the size of the window
+		viewport.height = (float)swapChainExtent.height;
+		viewport.minDepth = 0.0f;
+		viewport.maxDepth = 1.0f;
+
+		VkRect2D scissor = {};
+		scissor.offset = { 0, 0 };
+		scissor.extent = swapChainExtent;
+
+		VkPipelineViewportStateCreateInfo viewportState = {};
+		viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+		viewportState.pViewports = &viewport;
+		viewportState.viewportCount = 1;
+		viewportState.pScissors = &scissor;
+		viewportState.scissorCount = 1;
+
+
+
+
+		//Rasterizer
+		//rasterizes the output of the vertex shader, performs depth and culling checks
+		//also applies scissors and can be configured for wireframe rendering.
+		VkPipelineRasterizationStateCreateInfo rasterizer = {};
+		rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+		rasterizer.depthClampEnable = VK_FALSE;			//if true, clamps fragments that are beyond the near/far plane instead of discarding them
+		rasterizer.rasterizerDiscardEnable = VK_FALSE;	//if true, disables the all output to the framebuffer
+		rasterizer.polygonMode = VK_POLYGON_MODE_FILL;	//other modes: line = polygon edges drawn as lines. point: polygon vertices drawn as points
+		rasterizer.lineWidth = 1.0f;					//line width in fragments. Thicker lines require to enable wideLines GPU feature.
+		rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;	//back face culling
+		rasterizer.frontFace = VK_FRONT_FACE_CLOCKWISE;	//face winding
+		rasterizer.depthBiasEnable = VK_FALSE;			//depth biasing. similar to face displacement
+		rasterizer.depthBiasConstantFactor = 0.0f;
+		rasterizer.depthBiasClamp = 0.0f;
+		rasterizer.depthBiasSlopeFactor = 0.0f;
+
+
+
+
+		//Multisampling AA
+		//less expensive than superscaling AA because it is only run if multiple polygons map to the same pixel
+		//requires enabling a GPU feature to use
+		VkPipelineMultisampleStateCreateInfo multisampling = {};
+		multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+		multisampling.sampleShadingEnable = VK_FALSE;
+		multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+		multisampling.minSampleShading = 1.0;
+		multisampling.pSampleMask = nullptr;
+		multisampling.alphaToCoverageEnable = VK_FALSE;
+		multisampling.alphaToOneEnable = VK_FALSE;
+
+
+
+
+		//Depth / Stencil Buffer
+		//Off for now
+		
+
+		
+
+		//Color Blending
+		//blends color of current pixel with another pixel which is already in the framebuffer at the same location
+		//can be done by mixing the two colors or by combining them in a bitwise operation
+		//VkPipelineColorBlendAttachmentState is a per-framebuffer configuration of blend states
+		VkPipelineColorBlendAttachmentState colorBlendAttachment = {};
+		colorBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+		colorBlendAttachment.blendEnable = VK_FALSE;
+		colorBlendAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
+		colorBlendAttachment.dstColorBlendFactor = VK_BLEND_FACTOR_ONE;
+		colorBlendAttachment.colorBlendOp = VK_BLEND_OP_ADD;
+		colorBlendAttachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+		colorBlendAttachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+		colorBlendAttachment.alphaBlendOp = VK_BLEND_OP_ADD;
+
+		/*
+			if (blendEnable) {
+				finalColor.rgb = (srcColorBlendFactor * newColor.rgb) <colorBlendOp> (dstColorBlendFactor * oldColor.rgb);
+				finalColor.a = (srcAlphaBlendFactor * newColor.a) <alphaBlendOp> (dstAlphaBlendFactor * oldColor.a);
+			} else {
+				finalColor = newColor;
+			}
+
+			finalColor = finalColor & colorWriteMask;
+		*/
+
+		//VkPipelineColorBlendStateCreateInfo is for global color blending settings
+		VkPipelineColorBlendStateCreateInfo colorBlending = {};
+		colorBlending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+		colorBlending.logicOpEnable = VK_FALSE;					//Set to true to use bit-wise operations for blending, rather than mixing
+		colorBlending.logicOp = VK_LOGIC_OP_COPY;
+		colorBlending.attachmentCount = 1;
+		colorBlending.pAttachments = &colorBlendAttachment;
+		colorBlending.blendConstants[0] = 0.0f;
+		colorBlending.blendConstants[1] = 0.0f;
+		colorBlending.blendConstants[2] = 0.0f;
+		colorBlending.blendConstants[3] = 0.0f;
+
+
+
+
+		//Pipeline Layout
+		//Used to define shader uniforms
+		VkPipelineLayoutCreateInfo pipelineLayoutInfo = {};
+		pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+		pipelineLayoutInfo.setLayoutCount = 0;
+		pipelineLayoutInfo.pSetLayouts = nullptr;
+		pipelineLayoutInfo.pushConstantRangeCount = 0;
+		pipelineLayoutInfo.pPushConstantRanges = nullptr;
+		if (vkCreatePipelineLayout(device, &pipelineLayoutInfo, nullptr, &pipelineLayout) != VK_SUCCESS)
+			throw std::runtime_error("failed to create pipeline layout");
+
+
+		VkGraphicsPipelineCreateInfo pipelineInfo = {};
+		pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+		pipelineInfo.stageCount = 2;
+		pipelineInfo.pStages = shaderStages;						//the shaders to be used
+		pipelineInfo.pVertexInputState = &vertexInputInfo;
+		pipelineInfo.pInputAssemblyState = &inputAssembly;
+		pipelineInfo.pViewportState = &viewportState;
+		pipelineInfo.pRasterizationState = &rasterizer;
+		pipelineInfo.pMultisampleState = &multisampling;
+		pipelineInfo.pDepthStencilState = nullptr;
+		pipelineInfo.pColorBlendState = &colorBlending;
+		pipelineInfo.pDynamicState = nullptr;
+		pipelineInfo.layout = pipelineLayout;
+		pipelineInfo.renderPass = renderPass;
+		pipelineInfo.subpass = 0;
+		pipelineInfo.basePipelineHandle = VK_NULL_HANDLE;			//in case this is a derived pipeline
+		pipelineInfo.basePipelineIndex = -1;
+
+		if (vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &graphicsPipeline) != VK_SUCCESS)
+			throw std::runtime_error("failed to create pipeline");
+
+		vkDestroyShaderModule(device, vertShaderModule, nullptr);
+		vkDestroyShaderModule(device, fragShaderModule, nullptr);
+	}
+
+	VkShaderModule createShaderModule(std::vector<char> const & code)
+	{
+		VkShaderModuleCreateInfo createInfo = {};
+		createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+		createInfo.pCode = reinterpret_cast<const uint32_t *>(code.data());
+		createInfo.codeSize = code.size();
+
+		VkShaderModule shaderModule;
+		if (vkCreateShaderModule(device, &createInfo, nullptr, &shaderModule) != VK_SUCCESS)
+			throw std::runtime_error("failed to create shader module");
+
+		return shaderModule;
 	}
 
 
@@ -633,7 +918,10 @@ private:
 		//7. create image views for each image in the swap chain
 		createImageViews();
 
-		//8. create the pipeline
+		//8. create render passes
+		createRenderPass();
+
+		//9. create the pipeline
 		createGraphicsPipeline();
 	}
 
@@ -647,6 +935,10 @@ private:
 
 	void cleanup()
 	{
+		vkDestroyPipeline(device, graphicsPipeline, nullptr);
+		vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
+		vkDestroyRenderPass(device, renderPass, nullptr);
+
 		for (auto imageView : swapChainImageViews)
 			vkDestroyImageView(device, imageView, nullptr);
 
