@@ -124,6 +124,8 @@ struct UniformBufferObject
 	glm::mat4 model;
 	glm::mat4 view;
 	glm::mat4 proj;
+
+	bool useTextures;
 };
 
 
@@ -1897,6 +1899,8 @@ private:
 
 		//need to flip the Y axis, since the Y axis in Vulkan is inverted with respect to OpenGL, for which glm was designed
 		ubo.proj[1][1] *= -1;
+
+		ubo.useTextures = true;
 
 		void * data;
 		vkMapMemory(device, uniformBuffersMemory[currentImage], 0, sizeof(ubo), 0, &data);
