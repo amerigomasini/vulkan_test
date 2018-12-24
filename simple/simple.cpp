@@ -29,6 +29,8 @@
 #include <sstream>
 #include <set>
 
+#include "utilities.hpp"
+
 const int WIDTH = 800;
 const int HEIGHT = 600;
 
@@ -51,79 +53,6 @@ const bool enableValidationLayers = true;
 const bool enableValidationLayers = true;
 #endif
 
-struct Vertex
-{
-	glm::vec3 pos;
-	glm::vec3 color;
-	glm::vec2 texCoord;
-	glm::vec3 normal;
-
-	static VkVertexInputBindingDescription getBindingDescription()
-	{
-		VkVertexInputBindingDescription bindingInputDescription = {};
-		bindingInputDescription.binding = 0;									//index of this binding in array of bindings
-		bindingInputDescription.stride = sizeof(Vertex);						//how many bytes to move between entries
-		bindingInputDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;		//these are per-vertex attributes
-		return bindingInputDescription;
-	}
-
-	//We have two attributes in Vertex, so we need two attribute descriptions
-	static std::array<VkVertexInputAttributeDescription, 4> getAttributeDescriptions()
-	{
-		/*
-		common formats:
-		float:	VK_FORMAT_R32_SFLOAT
-		double:	VK_FORMAT_R64_SFLOAT
-		vec2:	VK_FORMAT_R32G32_SFLOAT
-		ivec2:	VK_FORMAT_R32G32_SINT
-		vec3:	VK_FORMAT_R32G32B32_SFLOAT
-		vec4:	VK_FORMAT_R32G32B32A32_SFLOAT
-		uvec4:	VK_FORMAT_R32G32B32A32_SUINT
-		*/
-
-		std::array<VkVertexInputAttributeDescription, 4> attributeDescriptions = {};
-
-		attributeDescriptions[0].binding = 0;							//array of referenced binding in binding array
-		attributeDescriptions[0].location = 0;							//location of attribute within selected binding
-		attributeDescriptions[0].format = VK_FORMAT_R32G32B32_SFLOAT;	//vec3 of floats
-		attributeDescriptions[0].offset = offsetof(Vertex, pos);		//offset of pos into the Vertex structure
-
-		attributeDescriptions[1].binding = 0;
-		attributeDescriptions[1].location = 1;
-		attributeDescriptions[1].format = VK_FORMAT_R32G32B32_SFLOAT;
-		attributeDescriptions[1].offset = offsetof(Vertex, color);
-
-		attributeDescriptions[2].binding = 0;
-		attributeDescriptions[2].location = 2;
-		attributeDescriptions[2].format = VK_FORMAT_R32G32_SFLOAT;
-		attributeDescriptions[2].offset = offsetof(Vertex, texCoord);
-
-		attributeDescriptions[3].binding = 0;
-		attributeDescriptions[3].location = 3;
-		attributeDescriptions[3].format = VK_FORMAT_R32G32B32_SFLOAT;
-		attributeDescriptions[3].offset = offsetof(Vertex, normal);
-
-		return attributeDescriptions;
-	}
-
-	bool operator==(const Vertex& other) const {
-		return pos == other.pos && color == other.color && texCoord == other.texCoord;
-	}
-};
-
-namespace std
-{
-	template<> struct hash<Vertex>
-	{
-		size_t operator()(Vertex const& vertex) const
-		{
-			return ((hash<glm::vec3>()(vertex.pos) ^
-				(hash<glm::vec3>()(vertex.color) << 1)) >> 1) ^
-				(hash<glm::vec2>()(vertex.texCoord) << 1);
-		}
-	};
-}
-
 
 struct UniformBufferObject
 {
@@ -135,27 +64,8 @@ struct UniformBufferObject
 	bool useTextures;
 };
 
-std::vector<Vertex> vertices = {
-	//position             color               uv (not used)  normal
-	{{-0.5f, -0.5f, 0.5f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}, {-0.5773f, -0.5773f, 0.5773f}},
-	{{-0.5f, 0.5f, 0.5f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}, {-0.5773f, 0.5773f, 0.5773f}},
-	{{0.5f, 0.5f, 0.5f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f}, {0.5773f, 0.5773f, 0.5773f}},
-	{{0.5f, -0.5f, 0.5f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f}, {0.5773f, -0.5773f, 0.5773f}},
-	{{-0.5f, -0.5f, -0.5f}, {0.0f, 0.0f, 1.0f}, {0.0f, 0.0f}, {-0.5773f, -0.5773f, -0.5773f}},
-	{{-0.5f, 0.5f, -0.5f}, {0.0f, 0.0f, 1.0f}, {0.0f, 0.0f}, {-0.5773f, 0.5773f, -0.5773f}},
-	{{0.5f, 0.5f, -0.5f}, {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f}, {0.5773f, 0.5773f, -0.5773f}},
-	{{0.5f, -0.5f, -0.5f}, {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f}, {0.5773f, -0.5773f, -0.5773f}},
-};
-
-std::vector<uint32_t> indices = {
-	3, 1, 0, 3, 2, 1,
-	7, 2, 3, 6, 2, 7, 
-	2, 6, 5, 5, 1, 2,
-	5, 6, 7, 4, 5, 7,
-	1, 5, 4, 1, 4, 0,
-	4, 7, 3, 4, 3, 0,
-};
-
+std::vector<Vertex> vertices = Utilities::getCubeVertices();;
+std::vector<uint32_t> indices = Utilities::getCubeIndices();
 
 //Used to receive messages from validation layers about errors and warnings
 //To see how to configure validation layers, read <vulkan_dir>/Config/vk_layer_settings.txt
@@ -243,7 +153,6 @@ private:
 	VkDescriptorSetLayout descriptorSetLayout;
 	VkPipelineLayout pipelineLayout;
 	VkPipeline graphicsPipeline;
-	VkPipeline wireframePipeline;
 	std::vector<VkFramebuffer> swapChainFramebuffers;
 	VkCommandPool commandPool;
 	VkCommandPool transientCommandPool;
@@ -582,8 +491,6 @@ private:
 		//Features which we will need. They have to be supported by the physical device
 		VkPhysicalDeviceFeatures deviceFeatures = {};
 		deviceFeatures.samplerAnisotropy = VK_TRUE;
-		deviceFeatures.fillModeNonSolid = VK_TRUE;
-		deviceFeatures.wideLines = VK_TRUE;
 
 		VkDeviceCreateInfo createInfo = {};
 		createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
@@ -757,7 +664,6 @@ private:
 		vkFreeCommandBuffers(device, commandPool, static_cast<uint32_t>(commandBuffers.size()), &commandBuffers[0]);
 
 		vkDestroyPipeline(device, graphicsPipeline, nullptr);
-		vkDestroyPipeline(device, wireframePipeline, nullptr);
 		vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
 		vkDestroyRenderPass(device, renderPass, nullptr);
 
@@ -1106,11 +1012,8 @@ private:
 
 		//Dynamic states
 		//these states can be changed through command buffers
-		std::vector<VkDynamicState> dynamicStateEnables = {
-			VK_DYNAMIC_STATE_VIEWPORT,
-			VK_DYNAMIC_STATE_SCISSOR,
-			VK_DYNAMIC_STATE_LINE_WIDTH
-		};
+		std::vector<VkDynamicState> dynamicStateEnables = {};
+
 		VkPipelineDynamicStateCreateInfo dynamicStateInfo = {};
 		dynamicStateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
 		dynamicStateInfo.dynamicStateCount = static_cast<uint32_t>(dynamicStateEnables.size());
@@ -1136,14 +1039,6 @@ private:
 
 		if (vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &graphicsPipeline) != VK_SUCCESS)
 			throw std::runtime_error("failed to create pipeline");
-
-
-		//create wireframe pipeline
-		rasterizer.polygonMode = VK_POLYGON_MODE_LINE;
-		shaderStages[0] = loadShader("shaders/wire_vert.spv", VK_SHADER_STAGE_VERTEX_BIT);
-		shaderStages[1] = loadShader("shaders/wire_frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT);
-		if (vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &wireframePipeline) != VK_SUCCESS)
-			throw std::runtime_error("failed to create wireframe pipeline");
 	}
 
 	VkShaderModule createShaderModule(std::vector<char> const & code)
@@ -1213,13 +1108,20 @@ private:
 					attrib.vertices[3 * index.vertex_index + 2]
 				};
 
-				vertex.texCoord =
+				if (index.texcoord_index < 0)
 				{
-					attrib.texcoords[2 * index.texcoord_index + 0],
-					1.0f - attrib.texcoords[2 * index.texcoord_index + 1]
-				};
+					vertex.texCoord = { 0, 0 };
+				}
+				else
+				{
+					vertex.texCoord =
+					{
+						attrib.texcoords[2 * index.texcoord_index + 0],
+						1.0f - attrib.texcoords[2 * index.texcoord_index + 1]
+					};
+				}
 
-				vertex.color = { 1.0f, 1.0f, 1.0f };
+				vertex.color = { 0.44f, 0.44f, 0.44f };
 
 				if (uniqueVertices.count(vertex) == 0)
 				{
@@ -1625,18 +1527,6 @@ private:
 			//start a render pass
 			vkCmdBeginRenderPass(commandBuffers[i], &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 
-			VkViewport viewport = {};
-			viewport.width = (float)swapChainExtent.width;
-			viewport.height = (float)swapChainExtent.height;
-			viewport.minDepth = 0.0f;
-			viewport.maxDepth = 1.0f;
-			vkCmdSetViewport(commandBuffers[i], 0, 1, &viewport);
-
-			VkRect2D scissor = {};
-			scissor.extent = swapChainExtent;
-			scissor.offset = { 0, 0 };
-			vkCmdSetScissor(commandBuffers[i], 0, 1, &scissor);
-
 			//bind to the graphics pipeline
 			vkCmdBindPipeline(commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline);
 
@@ -1648,17 +1538,6 @@ private:
 			vkCmdBindIndexBuffer(commandBuffers[i], indexBuffer, 0, VK_INDEX_TYPE_UINT32);
 
 			vkCmdBindDescriptorSets(commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSets[i], 0, nullptr);
-
-			viewport.width = (float)swapChainExtent.width / 2.0f;
-			vkCmdSetViewport(commandBuffers[i], 0, 1, &viewport);
-
-			//draw
-			vkCmdDrawIndexed(commandBuffers[i], static_cast<uint32_t>(indices.size()), 1, 0, 0, 0);
-
-			viewport.x += viewport.width;
-			vkCmdSetViewport(commandBuffers[i], 0, 1, &viewport);
-			vkCmdBindPipeline(commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, wireframePipeline);
-			vkCmdSetLineWidth(commandBuffers[i], 2.0f);
 
 			//draw
 			vkCmdDrawIndexed(commandBuffers[i], static_cast<uint32_t>(indices.size()), 1, 0, 0, 0);
@@ -1921,7 +1800,7 @@ private:
 
 		UniformBufferObject ubo = {};
 		ubo.model = glm::rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-		ubo.view = glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+		ubo.view = glm::lookAt(glm::vec3(2, 2, 2), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
 		ubo.proj = glm::perspective(glm::radians(45.0f), swapChainExtent.width / (float)swapChainExtent.height, 0.1f, 10.0f);
 
 		//need to flip the Y axis, since the Y axis in Vulkan is inverted with respect to OpenGL, for which glm was designed

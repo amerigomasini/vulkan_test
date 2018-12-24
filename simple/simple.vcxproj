@@ -20,7 +20,7 @@
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>15.0</VCProjectVersion>
-    <ProjectGuid>{81B2B8D4-811F-4367-A1C6-D5EB9D27014E}</ProjectGuid>
+    <ProjectGuid>{7ED561AA-DEC8-4208-BF66-DB0BAE87AC0D}</ProjectGuid>
     <Keyword>Win32Proj</Keyword>
     <RootNamespace>vulkantest</RootNamespace>
     <WindowsTargetPlatformVersion>10.0.17134.0</WindowsTargetPlatformVersion>
@@ -159,10 +159,10 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="multi_pipeline.cpp" />
+    <ClInclude Include="..\common\utilities.hpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\common\utilities.hpp" />
+    <ClCompile Include="simple.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
