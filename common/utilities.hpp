@@ -109,4 +109,26 @@ public:
 		};
 		return vertices;
 	}
+
+	static std::vector<uint32_t> getSquareIndices()
+	{
+		std::vector<uint32_t> indices = {
+			0, 1, 2, 2, 3, 0
+		};
+
+		return indices;
+	}
+
+	static std::vector<Vertex> getSquareVertices()
+	{
+		std::vector<Vertex> vertices = {
+			//position				color				uv (not used)	normal
+			{{-0.5f, -0.5f, 0.0f},	{1.0f, 0.0f, 0.0f}, {1.0f, 0.0f},	{0.0f, 0.0f, 1.0f}},
+			{{0.5f, -0.5f, 0.0f},	{0.0f, 1.0f, 0.0f}, {0.0f, 0.0f},	{0.0f, 0.0f, 1.0f}},
+			{{0.5f, 0.5f, 0.0f},	{0.0f, 0.0f, 1.0f}, {0.0f, 1.0f},	{0.0f, 0.0f, 1.0f}},
+			{{-0.5f, 0.5f, 0.0f},	{1.0f, 1.0f, 1.0f}, {1.0f, 1.0f},	{0.0f, 0.0f, 1.0f}}
+		};
+
+		return vertices;
+	}
 };
