@@ -172,9 +172,9 @@ private:
 	struct Model
 	{
 	public:
-		std::vector<VkBuffer> uniformBuffers;
-		std::vector<VkDeviceMemory> uniformBuffersMemory;
-		std::vector<VkDescriptorSet> descriptorSets;			//implicitly destroyed with the descriptor set
+		VkBuffer uniformBuffer;
+		VkDeviceMemory uniformBufferMemory;
+		VkDescriptorSet descriptorSet;			//implicitly destroyed with the descriptor set
 		VkImage textureImage;
 		VkDeviceMemory textureImageMemory;
 		VkImageView textureImageView;
@@ -1265,17 +1265,10 @@ private:
 		vkFreeMemory(device, stagingBufferMemory, nullptr);
 	}
 
-	void createUniformBuffers(std::vector<VkBuffer> & uniformBuffers, std::vector<VkDeviceMemory> & uniformBuffersMemory)
+	void createUniformBuffers(VkBuffer & uniformBuffer, VkDeviceMemory & uniformBufferMemory)
 	{
 		VkDeviceSize bufferSize = sizeof(UniformBufferObject);
-
-		uniformBuffers.resize(swapChainImages.size());
-		uniformBuffersMemory.resize(swapChainImages.size());
-
-		for (size_t i = 0; i < uniformBuffers.size(); ++i)
-		{
-			createBuffer(bufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, uniformBuffers[i], uniformBuffersMemory[i]);
-		}
+		createBuffer(bufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, uniformBuffer, uniformBufferMemory);
 	}
 
 
@@ -1550,7 +1543,7 @@ private:
 
 			for (auto const & oneModel : models)
 			{
-				vkCmdBindDescriptorSets(commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &oneModel.descriptorSets[i], 0, nullptr);
+				vkCmdBindDescriptorSets(commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &oneModel.descriptorSet, 0, nullptr);
 
 				//draw
 				vkCmdDrawIndexed(commandBuffers[i], static_cast<uint32_t>(indices.size()), 1, 0, 0, 0);
@@ -1673,15 +1666,15 @@ private:
 	{
 		std::array<VkDescriptorPoolSize, 2> poolSizes = {};
 		poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-		poolSizes[0].descriptorCount = static_cast<uint32_t>(swapChainImages.size() * models.size());
+		poolSizes[0].descriptorCount = 2;
 		poolSizes[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-		poolSizes[1].descriptorCount = static_cast<uint32_t>(swapChainImages.size() * models.size());
+		poolSizes[1].descriptorCount = 2;
 
 		VkDescriptorPoolCreateInfo poolInfo = {};
 		poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
 		poolInfo.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
 		poolInfo.pPoolSizes = poolSizes.data();
-		poolInfo.maxSets = static_cast<uint32_t>(swapChainImages.size() * models.size());
+		poolInfo.maxSets = 2;
 
 		if (vkCreateDescriptorPool(device, &poolInfo, nullptr, &descriptorPool) != VK_SUCCESS)
 			throw std::runtime_error("failed to create descriptor pool");
@@ -1694,51 +1687,45 @@ private:
 		VkDescriptorSetAllocateInfo allocInfo = {};
 		allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
 		allocInfo.descriptorPool = descriptorPool;
-		allocInfo.descriptorSetCount = static_cast<uint32_t>(swapChainImages.size());
+		allocInfo.descriptorSetCount = 1;
 		allocInfo.pSetLayouts = layouts.data();
 
-		std::vector<VkDescriptorSet> & descriptorSets = model.descriptorSets;
-
-		descriptorSets.resize(swapChainImages.size());
-		if (vkAllocateDescriptorSets(device, &allocInfo, descriptorSets.data()) != VK_SUCCESS)
+		if (vkAllocateDescriptorSets(device, &allocInfo, &model.descriptorSet) != VK_SUCCESS)
 			throw std::runtime_error("failed to create descriptor sets");
 
-		for (size_t i = 0; i < descriptorSets.size(); ++i)
-		{
-			VkDescriptorBufferInfo bufferInfo = {};
-			bufferInfo.buffer = model.uniformBuffers[i];
-			bufferInfo.offset = 0;
-			bufferInfo.range = sizeof(UniformBufferObject);
+		VkDescriptorBufferInfo bufferInfo = {};
+		bufferInfo.buffer = model.uniformBuffer;
+		bufferInfo.offset = 0;
+		bufferInfo.range = sizeof(UniformBufferObject);
 
-			VkDescriptorImageInfo imageInfo = {};
-			imageInfo.sampler = model.textureSampler;
-			imageInfo.imageView = model.textureImageView;
-			imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+		VkDescriptorImageInfo imageInfo = {};
+		imageInfo.sampler = model.textureSampler;
+		imageInfo.imageView = model.textureImageView;
+		imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
-			std::array<VkWriteDescriptorSet, 2> descriptorWrites = {};
+		std::array<VkWriteDescriptorSet, 2> descriptorWrites = {};
 
-			descriptorWrites[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-			descriptorWrites[0].descriptorCount = 1;
-			descriptorWrites[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-			descriptorWrites[0].dstBinding = 0;
-			descriptorWrites[0].dstSet = descriptorSets[i];
-			descriptorWrites[0].dstArrayElement = 0;
-			descriptorWrites[0].pBufferInfo = &bufferInfo;	//only relevant for descriptors that refer to buffers
-			descriptorWrites[0].pImageInfo = nullptr;		//only relevant for descriptors that refer to images
-			descriptorWrites[0].pTexelBufferView = nullptr;	//only relevant for descriptors that refer to buffer views
+		descriptorWrites[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+		descriptorWrites[0].descriptorCount = 1;
+		descriptorWrites[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+		descriptorWrites[0].dstBinding = 0;
+		descriptorWrites[0].dstSet = model.descriptorSet;
+		descriptorWrites[0].dstArrayElement = 0;
+		descriptorWrites[0].pBufferInfo = &bufferInfo;	//only relevant for descriptors that refer to buffers
+		descriptorWrites[0].pImageInfo = nullptr;		//only relevant for descriptors that refer to images
+		descriptorWrites[0].pTexelBufferView = nullptr;	//only relevant for descriptors that refer to buffer views
 
-			descriptorWrites[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-			descriptorWrites[1].descriptorCount = 1;
-			descriptorWrites[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-			descriptorWrites[1].dstBinding = 1;
-			descriptorWrites[1].dstSet = descriptorSets[i];
-			descriptorWrites[1].dstArrayElement = 0;
-			descriptorWrites[1].pBufferInfo = nullptr;		//only relevant for descriptors that refer to buffers
-			descriptorWrites[1].pImageInfo = &imageInfo;	//only relevant for descriptors that refer to images
-			descriptorWrites[1].pTexelBufferView = nullptr;	//only relevant for descriptors that refer to buffer views
+		descriptorWrites[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+		descriptorWrites[1].descriptorCount = 1;
+		descriptorWrites[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+		descriptorWrites[1].dstBinding = 1;
+		descriptorWrites[1].dstSet = model.descriptorSet;
+		descriptorWrites[1].dstArrayElement = 0;
+		descriptorWrites[1].pBufferInfo = nullptr;		//only relevant for descriptors that refer to buffers
+		descriptorWrites[1].pImageInfo = &imageInfo;	//only relevant for descriptors that refer to images
+		descriptorWrites[1].pTexelBufferView = nullptr;	//only relevant for descriptors that refer to buffer views
 
-			vkUpdateDescriptorSets(device, static_cast<uint32_t>(descriptorWrites.size()), descriptorWrites.data(), 0, nullptr);
-		}
+		vkUpdateDescriptorSets(device, static_cast<uint32_t>(descriptorWrites.size()), descriptorWrites.data(), 0, nullptr);
 	}
 
 	static void framebufferResizeCallback(GLFWwindow * window, int width, int height)
@@ -1810,7 +1797,7 @@ private:
 			createTextureImageView(oneModel.textureImage, oneModel.textureImageView);
 			createTextureSampler(oneModel.textureSampler);
 
-			createUniformBuffers(oneModel.uniformBuffers, oneModel.uniformBuffersMemory);
+			createUniformBuffers(oneModel.uniformBuffer, oneModel.uniformBufferMemory);
 		}
 		
 		//loadModel();
@@ -1857,9 +1844,9 @@ private:
 			ubo.useTextures = true;
 
 			void * data;
-			vkMapMemory(device, oneModel.uniformBuffersMemory[currentImage], 0, sizeof(ubo), 0, &data);
+			vkMapMemory(device, oneModel.uniformBufferMemory, 0, sizeof(ubo), 0, &data);
 			memcpy(data, &ubo, sizeof(ubo));
-			vkUnmapMemory(device, oneModel.uniformBuffersMemory[currentImage]);
+			vkUnmapMemory(device, oneModel.uniformBufferMemory);
 		}
 	}
 
@@ -1962,11 +1949,8 @@ private:
 			vkDestroyImage(device, oneModel.textureImage, nullptr);
 			vkFreeMemory(device, oneModel.textureImageMemory, nullptr);
 
-			for (size_t i = 0; i < oneModel.uniformBuffers.size(); ++i)
-			{
-				vkDestroyBuffer(device, oneModel.uniformBuffers[i], nullptr);
-				vkFreeMemory(device, oneModel.uniformBuffersMemory[i], nullptr);
-			}
+			vkDestroyBuffer(device, oneModel.uniformBuffer, nullptr);
+			vkFreeMemory(device, oneModel.uniformBufferMemory, nullptr);
 		}
 
 		vkDestroyDescriptorPool(device, descriptorPool, nullptr);
