@@ -11,6 +11,8 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "different_textures", "diffe
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "simple", "simple\simple.vcxproj", "{7ED561AA-DEC8-4208-BF66-DB0BAE87AC0D}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "push_constants", "push_constants\push_constants.vcxproj", "{695AA402-F03C-4BDC-906A-2FBA067727C3}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -51,6 +53,14 @@ Global
 		{7ED561AA-DEC8-4208-BF66-DB0BAE87AC0D}.Release|x64.Build.0 = Release|x64
 		{7ED561AA-DEC8-4208-BF66-DB0BAE87AC0D}.Release|x86.ActiveCfg = Release|Win32
 		{7ED561AA-DEC8-4208-BF66-DB0BAE87AC0D}.Release|x86.Build.0 = Release|Win32
+		{695AA402-F03C-4BDC-906A-2FBA067727C3}.Debug|x64.ActiveCfg = Debug|x64
+		{695AA402-F03C-4BDC-906A-2FBA067727C3}.Debug|x64.Build.0 = Debug|x64
+		{695AA402-F03C-4BDC-906A-2FBA067727C3}.Debug|x86.ActiveCfg = Debug|Win32
+		{695AA402-F03C-4BDC-906A-2FBA067727C3}.Debug|x86.Build.0 = Debug|Win32
+		{695AA402-F03C-4BDC-906A-2FBA067727C3}.Release|x64.ActiveCfg = Release|x64
+		{695AA402-F03C-4BDC-906A-2FBA067727C3}.Release|x64.Build.0 = Release|x64
+		{695AA402-F03C-4BDC-906A-2FBA067727C3}.Release|x86.ActiveCfg = Release|Win32
+		{695AA402-F03C-4BDC-906A-2FBA067727C3}.Release|x86.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

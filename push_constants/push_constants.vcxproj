@@ -18,15 +18,9 @@
       <Platform>x64</Platform>
     </ProjectConfiguration>
   </ItemGroup>
-  <ItemGroup>
-    <ClInclude Include="..\common\utilities.hpp" />
-  </ItemGroup>
-  <ItemGroup>
-    <ClCompile Include="different_textures.cpp" />
-  </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>15.0</VCProjectVersion>
-    <ProjectGuid>{BAE7D6D8-DC2A-4FE6-96B7-E7D006BAC885}</ProjectGuid>
+    <ProjectGuid>{695AA402-F03C-4BDC-906A-2FBA067727C3}</ProjectGuid>
     <Keyword>Win32Proj</Keyword>
     <RootNamespace>vulkantest</RootNamespace>
     <WindowsTargetPlatformVersion>10.0.17763.0</WindowsTargetPlatformVersion>
@@ -164,6 +158,12 @@
       <AdditionalDependencies>vulkan-1.lib;glfw3.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClInclude Include="..\common\utilities.hpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="push_constants.cpp" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>
