@@ -1666,15 +1666,15 @@ private:
 	{
 		std::array<VkDescriptorPoolSize, 2> poolSizes = {};
 		poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-		poolSizes[0].descriptorCount = 2;
+		poolSizes[0].descriptorCount = 2;									//we will create two uniform sets, one for each model
 		poolSizes[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-		poolSizes[1].descriptorCount = 2;
+		poolSizes[1].descriptorCount = 2;									//we will create two texture sets, one for each model
 
 		VkDescriptorPoolCreateInfo poolInfo = {};
 		poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-		poolInfo.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
+		poolInfo.poolSizeCount = static_cast<uint32_t>(poolSizes.size());	//creates two descriptor pools, one for uniforms, one for textures
 		poolInfo.pPoolSizes = poolSizes.data();
-		poolInfo.maxSets = 2;
+		poolInfo.maxSets = 2;												//each pool can contain a maximum of two sets (one uniform, one texture)
 
 		if (vkCreateDescriptorPool(device, &poolInfo, nullptr, &descriptorPool) != VK_SUCCESS)
 			throw std::runtime_error("failed to create descriptor pool");
@@ -1682,7 +1682,7 @@ private:
 
 	void createDescriptorSets(Model & model)
 	{
-		std::vector<VkDescriptorSetLayout> layouts(swapChainImages.size(), descriptorSetLayout);
+		std::vector<VkDescriptorSetLayout> layouts(1, descriptorSetLayout);
 
 		VkDescriptorSetAllocateInfo allocInfo = {};
 		allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
@@ -1708,7 +1708,7 @@ private:
 		descriptorWrites[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
 		descriptorWrites[0].descriptorCount = 1;
 		descriptorWrites[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-		descriptorWrites[0].dstBinding = 0;
+		descriptorWrites[0].dstBinding = 0;				//the shader will access this using binding = 0
 		descriptorWrites[0].dstSet = model.descriptorSet;
 		descriptorWrites[0].dstArrayElement = 0;
 		descriptorWrites[0].pBufferInfo = &bufferInfo;	//only relevant for descriptors that refer to buffers
@@ -1718,7 +1718,7 @@ private:
 		descriptorWrites[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
 		descriptorWrites[1].descriptorCount = 1;
 		descriptorWrites[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-		descriptorWrites[1].dstBinding = 1;
+		descriptorWrites[1].dstBinding = 1;				//the shader will access this using binding = 1
 		descriptorWrites[1].dstSet = model.descriptorSet;
 		descriptorWrites[1].dstArrayElement = 0;
 		descriptorWrites[1].pBufferInfo = nullptr;		//only relevant for descriptors that refer to buffers
