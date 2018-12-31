@@ -35,7 +35,7 @@ const int WIDTH = 800;
 const int HEIGHT = 600;
 
 const std::string MODEL_PATH = "models/chalet.obj";
-const std::string TEXTURE_PATH = "models/chalet.jpg";
+const std::string TEXTURE_PATH = "../common/textures/chalet.jpg";
 
 const int MAX_FRAMES_IN_FLIGHT = 2;
 
@@ -58,7 +58,10 @@ struct UniformBufferObject
 	glm::mat4 model;
 	glm::mat4 view;
 	glm::mat4 proj;
+};
 
+struct SpecializationConstants
+{
 	bool useTextures;
 };
 
@@ -857,8 +860,6 @@ private:
 		shaderStages[0] = loadShader("shaders/vert.spv", VK_SHADER_STAGE_VERTEX_BIT);
 		shaderStages[1] = loadShader("shaders/frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT);
 
-
-
 		//Vertex Input
 		//Describes format of vertex data passed to Vertex Shader
 		auto bindingDescription = Vertex::getBindingDescription();
@@ -1029,7 +1030,24 @@ private:
 		pipelineInfo.subpass = 0;
 		pipelineInfo.basePipelineHandle = VK_NULL_HANDLE;			//in case this is a derived pipeline
 		pipelineInfo.basePipelineIndex = -1;
+		
+		SpecializationConstants specializationConstants;
+		specializationConstants.useTextures = true;
 
+		std::vector<VkSpecializationMapEntry> specializationMapEntries;
+		VkSpecializationMapEntry entry = {};
+		entry.constantID = 0;
+		entry.offset = offsetof(SpecializationConstants, useTextures);
+		entry.size = sizeof(specializationConstants.useTextures);
+		specializationMapEntries.push_back(entry);
+
+		VkSpecializationInfo specializationInfo = {};
+		specializationInfo.dataSize = sizeof(SpecializationConstants);
+		specializationInfo.pData = &specializationConstants;
+		specializationInfo.mapEntryCount = static_cast<uint32_t>(specializationMapEntries.size());
+		specializationInfo.pMapEntries = specializationMapEntries.data();
+
+		shaderStages[1].pSpecializationInfo = &specializationInfo;
 		if (vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &graphicsPipeline) != VK_SUCCESS)
 			throw std::runtime_error("failed to create pipeline");
 	}
@@ -1814,8 +1832,6 @@ private:
 
 		//need to flip the Y axis, since the Y axis in Vulkan is inverted with respect to OpenGL, for which glm was designed
 		ubo.proj[1][1] *= -1;
-
-		ubo.useTextures = true;
 
 		void * data;
 		vkMapMemory(device, uniformBuffersMemory[currentImage], 0, sizeof(ubo), 0, &data);

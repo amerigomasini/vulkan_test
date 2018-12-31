@@ -3,15 +3,16 @@
 
 layout(binding = 1) uniform sampler2D texSampler;
 
+layout(constant_id = 0) const bool USE_TEXTURES = true; 
+
 layout(location = 0) in vec3 fragColor;
 layout(location = 1) in vec2 fragTexCoord;
-layout(location = 2) flat in int fragUseTextures;
 
 layout(location = 0) out vec4 outColor;
 
 void main()
 {
-	if (fragUseTextures > 0) {
+	if (USE_TEXTURES) {
 		outColor = texture(texSampler, fragTexCoord);
 	}
 	else {

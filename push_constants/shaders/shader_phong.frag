@@ -1,19 +1,20 @@
 #version 450
 #extension GL_ARB_separate_shader_objects : enable
 
+layout(constant_id = 0) const bool USE_TEXTURES = false;
+
 layout(location = 0) in vec3 fragColor;
 layout(location = 1) in vec2 fragTexCoord;
-layout(location = 2) flat in int fragUseTextures;
-layout(location = 3) in vec3 fragViewVec;
-layout(location = 4) in vec3 fragLightVec;
-layout(location = 5) in vec3 fragNormal;
+layout(location = 2) in vec3 fragViewVec;
+layout(location = 3) in vec3 fragLightVec;
+layout(location = 4) in vec3 fragNormal;
 
 layout(location = 0) out vec4 outColor;
 
 void main()
 {
-	if (fragUseTextures > 0) {
-		
+	if (USE_TEXTURES) {
+		outColor = vec4(1, 0, 0, 1);
 	}
 	else {
 		vec3 ambient = fragColor * vec3(0.3f);

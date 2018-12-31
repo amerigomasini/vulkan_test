@@ -60,7 +60,10 @@ struct UniformBufferObject
 	glm::mat4 view;
 	glm::mat4 proj;
 	glm::vec4 lighPos = glm::vec4(0.0f, 2.0f, 1.0f, 0.0f);
+};
 
+struct SpecializationConstants
+{
 	bool useTextures;
 };
 
@@ -1037,6 +1040,23 @@ private:
 		pipelineInfo.basePipelineHandle = VK_NULL_HANDLE;			//in case this is a derived pipeline
 		pipelineInfo.basePipelineIndex = -1;
 
+		SpecializationConstants specializationConstants;
+
+		std::vector<VkSpecializationMapEntry> specializationMapEntries;
+		VkSpecializationMapEntry entry = {};
+		entry.constantID = 0;
+		entry.offset = offsetof(SpecializationConstants, useTextures);
+		entry.size = sizeof(specializationConstants.useTextures);
+		specializationMapEntries.push_back(entry);
+
+		VkSpecializationInfo specializationInfo = {};
+		specializationInfo.dataSize = sizeof(SpecializationConstants);
+		specializationInfo.pData = &specializationConstants;
+		specializationInfo.mapEntryCount = static_cast<uint32_t>(specializationMapEntries.size());
+		specializationInfo.pMapEntries = specializationMapEntries.data();
+		shaderStages[1].pSpecializationInfo = &specializationInfo;
+
+		specializationConstants.useTextures = false;
 		if (vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &graphicsPipeline) != VK_SUCCESS)
 			throw std::runtime_error("failed to create pipeline");
 	}
@@ -1805,8 +1825,6 @@ private:
 
 		//need to flip the Y axis, since the Y axis in Vulkan is inverted with respect to OpenGL, for which glm was designed
 		ubo.proj[1][1] *= -1;
-
-		ubo.useTextures = false;
 
 		void * data;
 		vkMapMemory(device, uniformBuffersMemory[currentImage], 0, sizeof(ubo), 0, &data);

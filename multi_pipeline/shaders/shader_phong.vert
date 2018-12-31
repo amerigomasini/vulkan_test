@@ -6,7 +6,6 @@ layout(binding = 0) uniform UniformBufferObject {
 	mat4 view;
 	mat4 proj;
 	vec4 lightPos;
-	int useTextures;
 } ubo;
 
 layout(location = 0) in vec3 inPosition;
@@ -16,10 +15,9 @@ layout(location = 3) in vec3 inNormal;
 
 layout(location = 0) out vec3 fragColor;
 layout(location = 1) out vec2 fragtexCoord;
-layout(location = 2) out int fragUseTextures;
-layout(location = 3) out vec3 fragViewVec;
-layout(location = 4) out vec3 fragLightVec;
-layout(location = 5) out vec3 fragNormal;
+layout(location = 2) out vec3 fragViewVec;
+layout(location = 3) out vec3 fragLightVec;
+layout(location = 4) out vec3 fragNormal;
 
 
 void main() {
@@ -27,7 +25,6 @@ void main() {
 
 	fragColor = inColor;
 	fragtexCoord = inTexCoord;
-	fragUseTextures = ubo.useTextures;
 
 	vec4 pos = ubo.view * ubo.model * vec4(inPosition, 1.0f);
 	fragNormal = mat3(ubo.view * ubo.model) * inNormal;

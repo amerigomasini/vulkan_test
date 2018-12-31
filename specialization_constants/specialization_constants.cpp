@@ -35,7 +35,7 @@ const int WIDTH = 800;
 const int HEIGHT = 600;
 
 const std::string MODEL_PATH = "";
-const std::string TEXTURE_PATH = "textures/texture.jpg";
+const std::string TEXTURE_PATH = "../common/textures/texture.jpg";
 
 const int MAX_FRAMES_IN_FLIGHT = 2;
 

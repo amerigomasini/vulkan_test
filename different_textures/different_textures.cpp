@@ -60,8 +60,6 @@ struct UniformBufferObject
 	glm::mat4 view;
 	glm::mat4 proj;
 	glm::vec4 lighPos = glm::vec4(0.0f, 2.0f, 1.0f, 0.0f);
-
-	bool useTextures;
 };
 
 std::vector<Vertex> vertices = Utilities::getSquareVertices();
@@ -1789,8 +1787,8 @@ private:
 		//Load textures
 		models[0].index = 0;
 		models[1].index = 1;
-		models[0].textureName = "textures/texture.jpg";
-		models[1].textureName = "textures/zoidberg.jpg";
+		models[0].textureName = "../common/textures/texture.jpg";
+		models[1].textureName = "../common/textures/zoidberg.jpg";
 		for (auto & oneModel : models)
 		{
 			createTextureImage(oneModel.textureName, oneModel.textureImage, oneModel.textureImageMemory);
@@ -1840,8 +1838,6 @@ private:
 
 			//need to flip the Y axis, since the Y axis in Vulkan is inverted with respect to OpenGL, for which glm was designed
 			ubo.proj[1][1] *= -1;
-
-			ubo.useTextures = true;
 
 			void * data;
 			vkMapMemory(device, oneModel.uniformBufferMemory, 0, sizeof(ubo), 0, &data);
