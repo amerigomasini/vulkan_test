@@ -122,7 +122,7 @@ public:
 	static std::vector<Vertex> getSquareVertices()
 	{
 		std::vector<Vertex> vertices = {
-			//position				color				uv (not used)	normal
+			//position				color				uv				normal
 			{{-0.5f, -0.5f, 0.0f},	{1.0f, 0.0f, 0.0f}, {1.0f, 0.0f},	{0.0f, 0.0f, 1.0f}},
 			{{0.5f, -0.5f, 0.0f},	{0.0f, 1.0f, 0.0f}, {0.0f, 0.0f},	{0.0f, 0.0f, 1.0f}},
 			{{0.5f, 0.5f, 0.0f},	{0.0f, 0.0f, 1.0f}, {0.0f, 1.0f},	{0.0f, 0.0f, 1.0f}},
