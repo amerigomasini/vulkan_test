@@ -1745,6 +1745,10 @@ private:
 		window = glfwCreateWindow(WIDTH, HEIGHT, "Vulkan", nullptr, nullptr);
 		glfwSetWindowUserPointer(window, this);
 		glfwSetFramebufferSizeCallback(window, framebufferResizeCallback);
+		glfwSetInputMode(window, GLFW_STICKY_KEYS, VK_TRUE);
+		glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+		glfwPollEvents();
+		glfwSetCursorPos(window, WIDTH / 2, HEIGHT / 2);
 	}
 
 	void initVulkan()
@@ -1810,18 +1814,94 @@ private:
 		createSynchObjects();
 	}
 
+	glm::vec3 position = glm::vec3(0, 0, 5);
+	// Initial horizontal angle : toward -Z
+	float horizontalAngle = 3.14f;
+	// Initial vertical angle : none
+	float verticalAngle = 0.0f;
+	// Initial Field of View
+	float initialFoV = 45.0f;
+
+	float speed = 3.0f; // 3 units / second
+	float mouseSpeed = 0.005f;
+
 
 	void updateUniformBuffer(uint32_t currentImage)
 	{
-		static auto startTime = std::chrono::high_resolution_clock::now();
+		// glfwGetTime is called only once, the first time this function is called
+		static double lastTime = glfwGetTime();
 
-		auto currentTime = std::chrono::high_resolution_clock::now();
-		float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
+		// Compute time difference between current and last frame
+		double currentTime = glfwGetTime();
+		float deltaTime = float(currentTime - lastTime);
+
+		// Get mouse position
+		double xpos, ypos;
+		glfwGetCursorPos(window, &xpos, &ypos);
+
+		// Reset mouse position for next frame
+		glfwSetCursorPos(window, swapChainExtent.width / 2, swapChainExtent.height / 2);
 
 		UniformBufferObject ubo = {};
-		ubo.model = glm::rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-		ubo.view = glm::lookAt(glm::vec3(2, 2, 2), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+
+		// Compute new orientation
+		horizontalAngle += mouseSpeed * float(swapChainExtent.width / 2 - xpos);
+		verticalAngle += mouseSpeed * float(swapChainExtent.height / 2 - ypos);
+
+		// Direction : Spherical coordinates to Cartesian coordinates conversion
+		glm::vec3 direction(
+			cos(verticalAngle) * sin(horizontalAngle),
+			sin(verticalAngle),
+			cos(verticalAngle) * cos(horizontalAngle)
+		);
+
+		// Right vector
+		glm::vec3 right = glm::vec3(
+			sin(horizontalAngle - 3.14f / 2.0f),
+			0,
+			cos(horizontalAngle - 3.14f / 2.0f)
+		);
+
+		// Up vector
+		glm::vec3 up = glm::cross(right, direction);
+
+ 		// Move forward
+		if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) {
+			position += direction * deltaTime * speed;
+		}
+		// Move backward
+		if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) {
+			position -= direction * deltaTime * speed;
+		}
+		// Strafe right
+		if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) {
+			position += right * deltaTime * speed;
+		}
+		// Strafe left
+		if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) {
+			position -= right * deltaTime * speed;
+		}
+		// Move up
+		if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS) {
+			position += up * deltaTime * speed;
+		}
+		// Move down
+		if (glfwGetKey(window, GLFW_KEY_C) == GLFW_PRESS) {
+			position -= up * deltaTime * speed;
+		}
+
 		ubo.proj = glm::perspective(glm::radians(45.0f), swapChainExtent.width / (float)swapChainExtent.height, 0.1f, 10.0f);
+		
+		ubo.view = glm::lookAt(
+			position,           // Camera is here
+			position + direction, // and looks here : at the same position, plus "direction"
+			up                  // Head is up (set to 0,-1,0 to look upside-down)
+		);
+
+		ubo.model = glm::mat4(1.0f);
+
+		// For the next frame, the "last time" will be "now"
+		lastTime = currentTime;
 
 		//need to flip the Y axis, since the Y axis in Vulkan is inverted with respect to OpenGL, for which glm was designed
 		ubo.proj[1][1] *= -1;
@@ -1910,7 +1990,7 @@ private:
 
 	void mainLoop()
 	{
-		while (!glfwWindowShouldClose(window))
+		while (glfwGetKey(window, GLFW_KEY_ESCAPE) != GLFW_PRESS && !glfwWindowShouldClose(window))
 		{
 			glfwPollEvents();
 			drawFrame();
