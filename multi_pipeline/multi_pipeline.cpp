@@ -12,9 +12,6 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 
-#define TINYOBJLOADER_IMPLEMENTATION
-#include "tiny_obj_loader.h"
-
 #include <iostream>
 #include <stdexcept>
 #include <functional>
@@ -1095,51 +1092,6 @@ private:
 		}
 	}
 
-	//Model Loading (supported: OBJ)
-	void loadModel()
-	{
-		tinyobj::attrib_t attrib;
-		std::vector<tinyobj::shape_t> shapes;
-		std::vector<tinyobj::material_t> materials;
-		std::string warn, err;
-
-		if (!tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, MODEL_PATH.c_str()))
-			throw std::runtime_error("failed to load model");
-
-		std::unordered_map<Vertex, uint32_t> uniqueVertices = {};
-
-		for (auto const & shape : shapes)
-		{
-			for (auto const & index : shape.mesh.indices)
-			{
-				Vertex vertex = {};
-
-				vertex.pos =
-				{
-					attrib.vertices[3 * index.vertex_index + 0],
-					attrib.vertices[3 * index.vertex_index + 1],
-					attrib.vertices[3 * index.vertex_index + 2]
-				};
-
-				vertex.texCoord =
-				{
-					attrib.texcoords[2 * index.texcoord_index + 0],
-					1.0f - attrib.texcoords[2 * index.texcoord_index + 1]
-				};
-
-				vertex.color = { 1.0f, 1.0f, 1.0f };
-
-				if (uniqueVertices.count(vertex) == 0)
-				{
-					uniqueVertices[vertex] = static_cast<uint32_t>(vertices.size());
-					vertices.push_back(vertex);
-				}
-
-				indices.push_back(uniqueVertices[vertex]);
-			}
-		}
-	}
-
 	//Buffers
 	uint32_t findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties)
 	{
@@ -1794,8 +1746,6 @@ private:
 		createDepthResources();
 
 		createFramebuffers();
-
-		//loadModel();
 
 		//13.create vertex buffers
 		createVertexBuffers();

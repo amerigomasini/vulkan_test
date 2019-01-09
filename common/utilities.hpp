@@ -4,6 +4,9 @@
 #include "vulkan/vulkan_core.h"
 #include "glm/glm.hpp"
 
+#define TINYOBJLOADER_IMPLEMENTATION
+#include "tiny_obj_loader.h"
+
 struct Vertex
 {
 	glm::vec3 pos;
@@ -130,5 +133,57 @@ public:
 		};
 
 		return vertices;
+	}
+
+	//Model Loading (supported: OBJ)
+	static void loadOBJModel(std::string const & modelPath, std::vector<Vertex> & outVertices, std::vector<uint32_t> & outIndices)
+	{
+		tinyobj::attrib_t attrib;
+		std::vector<tinyobj::shape_t> shapes;
+		std::vector<tinyobj::material_t> materials;
+		std::string warn, err;
+
+		if (!tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, modelPath.c_str()))
+			throw std::runtime_error("failed to load model");
+
+		std::unordered_map<Vertex, uint32_t> uniqueVertices = {};
+
+		for (auto const & shape : shapes)
+		{
+			for (auto const & index : shape.mesh.indices)
+			{
+				Vertex vertex = {};
+
+				vertex.pos =
+				{
+					attrib.vertices[3 * index.vertex_index + 0],
+					attrib.vertices[3 * index.vertex_index + 1],
+					attrib.vertices[3 * index.vertex_index + 2]
+				};
+
+				if (index.texcoord_index < 0)
+				{
+					vertex.texCoord = { 0, 0 };
+				}
+				else
+				{
+					vertex.texCoord =
+					{
+						attrib.texcoords[2 * index.texcoord_index + 0],
+						1.0f - attrib.texcoords[2 * index.texcoord_index + 1]
+					};
+				}
+
+				vertex.color = { 0.44f, 0.44f, 0.44f };
+
+				if (uniqueVertices.count(vertex) == 0)
+				{
+					uniqueVertices[vertex] = static_cast<uint32_t>(outVertices.size());
+					outVertices.push_back(vertex);
+				}
+
+				outIndices.push_back(uniqueVertices[vertex]);
+			}
+		}
 	}
 };
