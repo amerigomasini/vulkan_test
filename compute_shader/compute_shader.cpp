@@ -1357,7 +1357,7 @@ private:
 			VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, model.computeImage, model.computeImageMemory);
 
 		//transition the image to the same layout as the one used by the texture we use as the data source for the compute shader
-		transitionImageLayout(model.computeImage, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+		transitionImageLayout(model.computeImage, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
 
 		//create a sampler
 		createTextureSampler(model.computeSampler);
@@ -1434,7 +1434,7 @@ private:
 
 		transitionImageLayout(outImage, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 		copyBufferToImage(stagingBuffer, outImage, static_cast<uint32_t>(outTexWidth), static_cast<uint32_t>(outTexHeight));
-		transitionImageLayout(outImage, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+		transitionImageLayout(outImage, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL);
 
 		vkDestroyBuffer(device, stagingBuffer, nullptr);
 		vkFreeMemory(device, stagingBufferMemory, nullptr);
@@ -1527,9 +1527,17 @@ private:
 		else if (oldLayout == VK_IMAGE_LAYOUT_UNDEFINED && newLayout == VK_IMAGE_LAYOUT_GENERAL)
 		{
 			barrier.srcAccessMask = 0;
-			barrier.dstAccessMask = VK_ACCESS_HOST_WRITE_BIT | VK_ACCESS_TRANSFER_WRITE_BIT;
+			barrier.dstAccessMask = 0;
 
 			sourceStage = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
+			destinationStage = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
+		}
+		else if (oldLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL && newLayout == VK_IMAGE_LAYOUT_GENERAL)
+		{
+			barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+			barrier.dstAccessMask = 0;
+
+			sourceStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
 			destinationStage = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
 		}
 		else
@@ -1661,6 +1669,7 @@ private:
 
 			//bind to the graphics pipeline
 			vkCmdBindPipeline(commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline);
+
 
 			//bind vertex buffers to the vertex pipeline
 			VkBuffer vertexBuffers[] = { vertexBuffer };
@@ -1858,7 +1867,7 @@ private:
 		VkDescriptorImageInfo imageInfo = {};
 		imageInfo.sampler = model.textureSampler;
 		imageInfo.imageView = model.textureImageView;
-		imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+		imageInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
 
 		std::array<VkWriteDescriptorSet, 2> descriptorWrites = {};
 
@@ -1934,7 +1943,7 @@ private:
 		VkDescriptorImageInfo imageInfo = {};
 		imageInfo.sampler = models[0].textureSampler;
 		imageInfo.imageView = models[0].textureImageView;
-		imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+		imageInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
 
 		//binding 0 is the source image
 		VkWriteDescriptorSet oneDescriptor = {};
@@ -1955,7 +1964,7 @@ private:
 		VkDescriptorImageInfo postImageInfo = {};
 		postImageInfo.sampler = models[0].computeSampler;
 		postImageInfo.imageView = models[0].computeImageView;
-		postImageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+		postImageInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
 		oneDescriptor.dstBinding = 1;
 		oneDescriptor.pImageInfo = &postImageInfo;
 		descriptorSets.push_back(oneDescriptor);
