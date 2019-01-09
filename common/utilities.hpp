@@ -7,6 +7,11 @@
 #define TINYOBJLOADER_IMPLEMENTATION
 #include "tiny_obj_loader.h"
 
+#include "assimp/Importer.hpp"
+#include "assimp/scene.h"
+#include "assimp/postprocess.h"
+#include "assimp/cimport.h"
+
 struct Vertex
 {
 	glm::vec3 pos;
@@ -65,6 +70,14 @@ struct Vertex
 	bool operator==(const Vertex& other) const {
 		return pos == other.pos && color == other.color && texCoord == other.texCoord;
 	}
+};
+
+struct Part
+{
+	size_t vertexBase;	//start of vertices in the vertex uber-buffer
+	size_t indexBase;	//start of indices in the indices uber-buffer
+	size_t vertexCount;	//number of vertices which make up this part
+	size_t indexCount;	//number of indices which make up this part
 };
 
 namespace std
@@ -183,6 +196,72 @@ public:
 				}
 
 				outIndices.push_back(uniqueVertices[vertex]);
+			}
+		}
+	}
+
+	static void loadModel(std::string const & modelPath, std::vector<Vertex> & outVertices, std::vector<uint32_t> & outIndices, std::vector<Part> & outParts)
+	{
+		Assimp::Importer importer;
+		const aiScene * scene;
+
+		static const int defaultFlags = aiProcess_FlipWindingOrder | aiProcess_Triangulate | aiProcess_PreTransformVertices | aiProcess_CalcTangentSpace | aiProcess_GenSmoothNormals;
+
+		scene = importer.ReadFile(modelPath.c_str(), defaultFlags);
+		if (scene == nullptr)
+			throw std::runtime_error("failed to load model with assimp");
+
+		size_t vertexCount = 0;
+		size_t indexCount = 0;
+
+		outParts.resize(scene->mNumMeshes);
+
+		// Load meshes
+		for (unsigned int i = 0; i < scene->mNumMeshes; i++)
+		{
+			const aiMesh* paiMesh = scene->mMeshes[i];
+
+			outParts[i] = {};
+			outParts[i].vertexBase = vertexCount;
+			outParts[i].indexBase = indexCount;
+
+			vertexCount += scene->mMeshes[i]->mNumVertices;
+
+			aiColor3D pColor(0.f, 0.f, 0.f);
+			scene->mMaterials[paiMesh->mMaterialIndex]->Get(AI_MATKEY_COLOR_DIFFUSE, pColor);
+
+			const aiVector3D Zero3D(0.0f, 0.0f, 0.0f);
+
+			for (unsigned int j = 0; j < paiMesh->mNumVertices; j++)
+			{
+				const aiVector3D* pPos = &(paiMesh->mVertices[j]);
+				const aiVector3D* pNormal = &(paiMesh->mNormals[j]);
+				const aiVector3D* pTexCoord = (paiMesh->HasTextureCoords(0)) ? &(paiMesh->mTextureCoords[0][j]) : &Zero3D;
+
+// 				const aiVector3D* pTangent = (paiMesh->HasTangentsAndBitangents()) ? &(paiMesh->mTangents[j]) : &Zero3D;
+// 				const aiVector3D* pBiTangent = (paiMesh->HasTangentsAndBitangents()) ? &(paiMesh->mBitangents[j]) : &Zero3D;
+
+				Vertex oneVertex;
+				oneVertex.pos = glm::vec3(pPos->x, -pPos->y, pPos->z);
+				oneVertex.normal = glm::vec3(pNormal->x, -pNormal->y, pNormal->z);
+				oneVertex.texCoord = glm::vec2(pTexCoord->x, pTexCoord->y);
+				oneVertex.color = glm::vec3(pColor.r, pColor.g, pColor.b);
+				outVertices.push_back(oneVertex);
+			}
+
+			outParts[i].vertexCount = paiMesh->mNumVertices;
+
+			uint32_t indexBase = static_cast<uint32_t>(outIndices.size());
+			for (unsigned int j = 0; j < paiMesh->mNumFaces; j++)
+			{
+				const aiFace& Face = paiMesh->mFaces[j];
+				if (Face.mNumIndices != 3)
+					continue;
+				outIndices.push_back(indexBase + Face.mIndices[0]);
+				outIndices.push_back(indexBase + Face.mIndices[1]);
+				outIndices.push_back(indexBase + Face.mIndices[2]);
+				outParts[i].indexCount += 3;
+				indexCount += 3;
 			}
 		}
 	}
