@@ -17,6 +17,8 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "specialization_constants", 
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "simple_mm", "simple_with_memory_manager\simple_mm.vcxproj", "{AA1F985C-6067-421E-92AB-050AEED1D3AC}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "compute_shader", "compute_shader\compute_shader.vcxproj", "{93083096-4481-46D6-8E49-5B82AB267E2F}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -81,6 +83,14 @@ Global
 		{AA1F985C-6067-421E-92AB-050AEED1D3AC}.Release|x64.Build.0 = Release|x64
 		{AA1F985C-6067-421E-92AB-050AEED1D3AC}.Release|x86.ActiveCfg = Release|Win32
 		{AA1F985C-6067-421E-92AB-050AEED1D3AC}.Release|x86.Build.0 = Release|Win32
+		{93083096-4481-46D6-8E49-5B82AB267E2F}.Debug|x64.ActiveCfg = Debug|x64
+		{93083096-4481-46D6-8E49-5B82AB267E2F}.Debug|x64.Build.0 = Debug|x64
+		{93083096-4481-46D6-8E49-5B82AB267E2F}.Debug|x86.ActiveCfg = Debug|Win32
+		{93083096-4481-46D6-8E49-5B82AB267E2F}.Debug|x86.Build.0 = Debug|Win32
+		{93083096-4481-46D6-8E49-5B82AB267E2F}.Release|x64.ActiveCfg = Release|x64
+		{93083096-4481-46D6-8E49-5B82AB267E2F}.Release|x64.Build.0 = Release|x64
+		{93083096-4481-46D6-8E49-5B82AB267E2F}.Release|x86.ActiveCfg = Release|Win32
+		{93083096-4481-46D6-8E49-5B82AB267E2F}.Release|x86.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
