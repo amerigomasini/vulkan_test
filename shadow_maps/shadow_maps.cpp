@@ -62,9 +62,9 @@ struct UniformBufferObject
 	glm::vec4 lighPos = glm::vec4(0.0f, 2.0f, 1.0f, 0.0f);
 };
 
-struct SpecializationConstants
+struct LightUniformBufferObject
 {
-	bool useTextures;
+	glm::mat4 lightMVP;
 };
 
 std::vector<Vertex> vertices;
@@ -173,8 +173,8 @@ private:
 	VkBuffer indexBuffer;
 	VmaAllocation indexBufferAllocation;
 
-	std::vector<VkBuffer> uniformBuffers;
-	std::vector<VmaAllocation> uniformBuffersMemory;
+	VkBuffer uniformBuffer;
+	VmaAllocation uniformBuffersMemory;
 	VkDescriptorPool descriptorPool;
 	std::vector<VkDescriptorSet> descriptorSets;			//implicitly destroyed with the descriptor set
 
@@ -194,6 +194,11 @@ private:
 	VkImageView offscreenImageView;
 	VkImage offscreenImage;
 	VmaAllocation offscreenImageMemory;
+	VkPipeline offscreenPipeline;
+	VkPipelineLayout offscreenPipelineLayout;
+	VkDescriptorSetLayout offscreenDescriptorSetLayout;
+	VkBuffer offscreenUBO;
+	VmaAllocation offscreenUBOMemory;
 
 	std::vector<VkShaderModule> shaderModules;
 
@@ -683,6 +688,7 @@ private:
 		vmaDestroyImage(allocator, offscreenImage, offscreenImageMemory);
 		vkDestroyFramebuffer(device, offscreenFrameBuffer, nullptr);
 		vkDestroyRenderPass(device, offscreenRenderPass, nullptr);
+		vkDestroyPipeline(device, offscreenPipeline, nullptr);
 
 		vkFreeCommandBuffers(device, commandPool, static_cast<uint32_t>(commandBuffers.size()), &commandBuffers[0]);
 
@@ -841,23 +847,34 @@ private:
 	//Uniforms Descriptors
 	void createDescriptorSetLayout()
 	{
-		VkDescriptorSetLayoutBinding uboLayoutBinding = {};
-		uboLayoutBinding.binding = 0;											//binding used in the shader
-		uboLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;	//type of descriptor
-		uboLayoutBinding.descriptorCount = 1;
-		uboLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;				//which shader stage will use it. different flags can be ORd together
-		uboLayoutBinding.pImmutableSamplers = nullptr;							//only relevant for image sampling
+		std::vector<VkDescriptorSetLayoutBinding> layouts;
+		VkDescriptorSetLayoutBinding layoutBinding = {};
+		layoutBinding.binding = 0;											//binding used in the shader
+		layoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;	//type of descriptor
+		layoutBinding.descriptorCount = 1;
+		layoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;				//which shader stage will use it. different flags can be ORd together
+		layoutBinding.pImmutableSamplers = nullptr;							//only relevant for image sampling
+		layouts.push_back(layoutBinding);
 
-
-		std::array<VkDescriptorSetLayoutBinding, 1> bindings = { uboLayoutBinding };
 		VkDescriptorSetLayoutCreateInfo layoutInfo = {};
 		layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-		layoutInfo.bindingCount = static_cast<uint32_t>(bindings.size());
-		layoutInfo.pBindings = bindings.data();
+		layoutInfo.bindingCount = static_cast<uint32_t>(layouts.size());
+		layoutInfo.pBindings = layouts.data();
+
+		if (vkCreateDescriptorSetLayout(device, &layoutInfo, nullptr, &offscreenDescriptorSetLayout) != VK_SUCCESS)
+			throw std::runtime_error("failed to create offscreen descriptor set layout");
+
+
+		layoutBinding.binding = 1;
+		layoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+		layoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+		layouts.push_back(layoutBinding);
+
+		layoutInfo.bindingCount = static_cast<uint32_t>(layouts.size());
+		layoutInfo.pBindings = layouts.data();
 
 		if (vkCreateDescriptorSetLayout(device, &layoutInfo, nullptr, &descriptorSetLayout) != VK_SUCCESS)
 			throw std::runtime_error("failed to create descriptor set layout");
-
 	}
 
 	VkPipelineShaderStageCreateInfo loadShader(std::string shader_file, VkShaderStageFlagBits stage)
@@ -885,7 +902,13 @@ private:
 		//Vertex Input
 		//Describes format of vertex data passed to Vertex Shader
 		auto bindingDescription = Vertex::getBindingDescription();
-		auto attributeDescription = Vertex::getAttributeDescriptions();
+		std::vector<Vertex::VertexComponent> requiredComponents = {
+			Vertex::VertexComponent::Position,
+			Vertex::VertexComponent::Color,
+			Vertex::VertexComponent::TextureUV,
+			Vertex::VertexComponent::Normal
+		};
+		auto attributeDescription = Vertex::getAttributeDescriptions(requiredComponents);
 		VkPipelineVertexInputStateCreateInfo vertexInputInfo = {};
 		vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
 		vertexInputInfo.vertexBindingDescriptionCount = 1;
@@ -1062,25 +1085,31 @@ private:
 		pipelineInfo.basePipelineHandle = VK_NULL_HANDLE;			//in case this is a derived pipeline
 		pipelineInfo.basePipelineIndex = -1;
 
-		SpecializationConstants specializationConstants;
-
-		std::vector<VkSpecializationMapEntry> specializationMapEntries;
-		VkSpecializationMapEntry entry = {};
-		entry.constantID = 0;
-		entry.offset = offsetof(SpecializationConstants, useTextures);
-		entry.size = sizeof(specializationConstants.useTextures);
-		specializationMapEntries.push_back(entry);
-
-		VkSpecializationInfo specializationInfo = {};
-		specializationInfo.dataSize = sizeof(SpecializationConstants);
-		specializationInfo.pData = &specializationConstants;
-		specializationInfo.mapEntryCount = static_cast<uint32_t>(specializationMapEntries.size());
-		specializationInfo.pMapEntries = specializationMapEntries.data();
-		shaderStages[1].pSpecializationInfo = &specializationInfo;
-
-		specializationConstants.useTextures = false;
 		if (vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &graphicsPipeline) != VK_SUCCESS)
 			throw std::runtime_error("failed to create pipeline");
+
+
+		//create a new layout
+		pipelineLayoutInfo.pSetLayouts = &offscreenDescriptorSetLayout;
+		if (vkCreatePipelineLayout(device, &pipelineLayoutInfo, nullptr, &offscreenPipelineLayout) != VK_SUCCESS)
+			throw std::runtime_error("failed to create pipeline layout");
+
+		//use a different shader
+		VkPipelineShaderStageCreateInfo offscreenShaderStageInfo = loadShader("shaders/shadow_map_vert.spv", VK_SHADER_STAGE_VERTEX_BIT);
+
+		auto offscreenAttributeDescription = Vertex::getAttributeDescriptions({ Vertex::VertexComponent::Position });
+		vertexInputInfo.vertexAttributeDescriptionCount = static_cast<uint32_t>(offscreenAttributeDescription.size());
+		vertexInputInfo.pVertexAttributeDescriptions = offscreenAttributeDescription.data();
+
+		rasterizer.depthBiasEnable = VK_TRUE;
+		colorBlending.attachmentCount = 0;
+
+		pipelineInfo.layout = offscreenPipelineLayout;
+		pipelineInfo.renderPass = offscreenRenderPass;
+		pipelineInfo.stageCount = 1;
+		pipelineInfo.pStages = &offscreenShaderStageInfo;
+		if (vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &offscreenPipeline) != VK_SUCCESS)
+			throw std::runtime_error("failed to create offscreen pipeline");
 	}
 
 	VkShaderModule createShaderModule(std::vector<char> const & code)
@@ -1188,6 +1217,8 @@ private:
 
 		offscreenImageView = createImageView(offscreenImage, depthFormat, VK_IMAGE_ASPECT_DEPTH_BIT);
 		transitionImageLayout(offscreenImage, depthFormat, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
+
+		createTextureSampler();
 
 		VkFramebufferCreateInfo framebufferInfo = {};
 		framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
@@ -1311,14 +1342,11 @@ private:
 	void createUniformBuffers()
 	{
 		VkDeviceSize bufferSize = sizeof(UniformBufferObject);
+		createBuffer(bufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, uniformBuffer, uniformBuffersMemory);
+		
+		bufferSize = sizeof(LightUniformBufferObject);
+		createBuffer(bufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, offscreenUBO, offscreenUBOMemory);
 
-		uniformBuffers.resize(swapChainImages.size());
-		uniformBuffersMemory.resize(swapChainImages.size());
-
-		for (size_t i = 0; i < uniformBuffers.size(); ++i)
-		{
-			createBuffer(bufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, uniformBuffers[i], uniformBuffersMemory[i]);
-		}
 	}
 
 
@@ -1581,7 +1609,9 @@ private:
 
 			vkCmdBindIndexBuffer(commandBuffers[i], indexBuffer, 0, VK_INDEX_TYPE_UINT32);
 
-			vkCmdBindDescriptorSets(commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSets[i], 0, nullptr);
+			//descriptoSets 0 --> shadow maps
+			//descriptoSets 1 --> scene
+			vkCmdBindDescriptorSets(commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSets[1], 0, nullptr);
 
 			//draw
 			vkCmdDrawIndexed(commandBuffers[i], static_cast<uint32_t>(indices.size()), 1, 0, 0, 0);
@@ -1701,15 +1731,18 @@ private:
 	//Descriptors
 	void createDescriptorPool()
 	{
-		std::array<VkDescriptorPoolSize, 1> poolSizes = {};
+		std::array<VkDescriptorPoolSize, 2> poolSizes = {};
 		poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-		poolSizes[0].descriptorCount = static_cast<uint32_t>(swapChainImages.size());
+		poolSizes[0].descriptorCount = 2;
+		poolSizes[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+		poolSizes[1].descriptorCount = 1;
+
 
 		VkDescriptorPoolCreateInfo poolInfo = {};
 		poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
 		poolInfo.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
 		poolInfo.pPoolSizes = poolSizes.data();
-		poolInfo.maxSets = static_cast<uint32_t>(swapChainImages.size());
+		poolInfo.maxSets = 2;
 
 		if (vkCreateDescriptorPool(device, &poolInfo, nullptr, &descriptorPool) != VK_SUCCESS)
 			throw std::runtime_error("failed to create descriptor pool");
@@ -1717,39 +1750,59 @@ private:
 
 	void createDescriptorSets()
 	{
-		std::vector<VkDescriptorSetLayout> layouts(swapChainImages.size(), descriptorSetLayout);
+		std::vector<VkDescriptorSetLayout> descriptorSetLayouts;
+		descriptorSetLayouts.push_back(offscreenDescriptorSetLayout);
+		descriptorSetLayouts.push_back(descriptorSetLayout);
 
 		VkDescriptorSetAllocateInfo allocInfo = {};
 		allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
 		allocInfo.descriptorPool = descriptorPool;
-		allocInfo.descriptorSetCount = static_cast<uint32_t>(swapChainImages.size());
-		allocInfo.pSetLayouts = layouts.data();
+		allocInfo.descriptorSetCount = static_cast<uint32_t>(descriptorSetLayouts.size());
+		allocInfo.pSetLayouts = descriptorSetLayouts.data();
 
-		descriptorSets.resize(swapChainImages.size());
+		descriptorSets.resize(descriptorSetLayouts.size());
 		if (vkAllocateDescriptorSets(device, &allocInfo, descriptorSets.data()) != VK_SUCCESS)
 			throw std::runtime_error("failed to create descriptor sets");
 
-		for (size_t i = 0; i < descriptorSets.size(); ++i)
-		{
-			VkDescriptorBufferInfo bufferInfo = {};
-			bufferInfo.buffer = uniformBuffers[i];
-			bufferInfo.offset = 0;
-			bufferInfo.range = sizeof(UniformBufferObject);
+		//offscreen descriptor set
+		VkDescriptorBufferInfo bufferInfo = {};
+		bufferInfo.buffer = offscreenUBO;
+		bufferInfo.offset = 0;
+		bufferInfo.range = sizeof(LightUniformBufferObject);
 
-			std::array<VkWriteDescriptorSet, 1> descriptorWrites = {};
+		std::vector<VkWriteDescriptorSet> descriptorWrites;
+		VkWriteDescriptorSet writeDescriptorSet = {};
+		writeDescriptorSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+		writeDescriptorSet.descriptorCount = 1;
+		writeDescriptorSet.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+		writeDescriptorSet.dstBinding = 0;
+		writeDescriptorSet.dstSet = descriptorSets[0];
+		writeDescriptorSet.dstArrayElement = 0;
+		writeDescriptorSet.pBufferInfo = &bufferInfo;	//only relevant for descriptors that refer to buffers
+		writeDescriptorSet.pImageInfo = nullptr;		//only relevant for descriptors that refer to images
+		writeDescriptorSet.pTexelBufferView = nullptr;	//only relevant for descriptors that refer to buffer views
+		descriptorWrites.push_back(writeDescriptorSet);
 
-			descriptorWrites[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-			descriptorWrites[0].descriptorCount = 1;
-			descriptorWrites[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-			descriptorWrites[0].dstBinding = 0;
-			descriptorWrites[0].dstSet = descriptorSets[i];
-			descriptorWrites[0].dstArrayElement = 0;
-			descriptorWrites[0].pBufferInfo = &bufferInfo;	//only relevant for descriptors that refer to buffers
-			descriptorWrites[0].pImageInfo = nullptr;		//only relevant for descriptors that refer to images
-			descriptorWrites[0].pTexelBufferView = nullptr;	//only relevant for descriptors that refer to buffer views
+		vkUpdateDescriptorSets(device, static_cast<uint32_t>(descriptorWrites.size()), descriptorWrites.data(), 0, nullptr);
 
-			vkUpdateDescriptorSets(device, static_cast<uint32_t>(descriptorWrites.size()), descriptorWrites.data(), 0, nullptr);
-		}
+		//scene descriptor set
+		bufferInfo.buffer = uniformBuffer;
+		bufferInfo.range = sizeof(UniformBufferObject);
+		descriptorWrites[0].dstSet = descriptorSets[1];
+		descriptorWrites[0].pBufferInfo = &bufferInfo;
+
+		VkDescriptorImageInfo imageInfo = {};
+		imageInfo.sampler = textureSampler;
+		imageInfo.imageView = offscreenImageView;
+		imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+		writeDescriptorSet.dstBinding = 1;
+		writeDescriptorSet.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+		writeDescriptorSet.dstSet = descriptorSets[1];
+		writeDescriptorSet.pBufferInfo = nullptr;
+		writeDescriptorSet.pImageInfo = &imageInfo;
+
+		vkUpdateDescriptorSets(device, static_cast<uint32_t>(descriptorWrites.size()), descriptorWrites.data(), 0, nullptr);
 	}
 
 	static void framebufferResizeCallback(GLFWwindow * window, int width, int height)
@@ -1770,7 +1823,7 @@ private:
 		glfwSetWindowUserPointer(window, this);
 		glfwSetFramebufferSizeCallback(window, framebufferResizeCallback);
 		glfwSetInputMode(window, GLFW_STICKY_KEYS, VK_TRUE);
-		glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+		//glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 		glfwPollEvents();
 		glfwSetCursorPos(window, WIDTH / 2, HEIGHT / 2);
 	}
@@ -1787,8 +1840,12 @@ private:
 		createImageViews();
 		createRenderPass();
 		createDescriptorSetLayout();
-		createGraphicsPipeline();
 		createCommandPool();
+
+		//shadow specific
+		createOffscreenFramebuffer();
+
+		createGraphicsPipeline();
 		createDepthResources();
 		createFramebuffers();
 
@@ -1798,9 +1855,6 @@ private:
 		createUniformBuffers();
 		createDescriptorPool();
 		createDescriptorSets();
-
-		//shadow specific
-		createOffscreenFramebuffer();
 
 		createCommandBuffers();
 		createSynchObjects();
@@ -1817,7 +1871,7 @@ private:
 	float speed = 10.0f; // 10 units / second
 	float mouseSpeed = 0.005f;
 
-	void updateUniformBuffer(uint32_t currentImage)
+	void updateUniformBuffer(uint32_t)
 	{
 		// glfwGetTime is called only once, the first time this function is called
 		static double lastTime = glfwGetTime();
@@ -1831,7 +1885,7 @@ private:
 		glfwGetCursorPos(window, &xpos, &ypos);
 
 		// Reset mouse position for next frame
-		glfwSetCursorPos(window, swapChainExtent.width / 2, swapChainExtent.height / 2);
+		//glfwSetCursorPos(window, swapChainExtent.width / 2, swapChainExtent.height / 2);
 
 		UniformBufferObject ubo = {};
 
@@ -1898,9 +1952,9 @@ private:
 		ubo.proj[1][1] *= -1;
 
 		void * data;
-		vmaMapMemory(allocator, uniformBuffersMemory[currentImage], &data);
+		vmaMapMemory(allocator, uniformBuffersMemory, &data);
 		memcpy(data, &ubo, sizeof(ubo));
-		vmaUnmapMemory(allocator, uniformBuffersMemory[currentImage]);
+		vmaUnmapMemory(allocator, uniformBuffersMemory);
 	}
 
 	void drawFrame()
@@ -2002,8 +2056,7 @@ private:
 		vkDestroyDescriptorPool(device, descriptorPool, nullptr);
 		vkDestroyDescriptorSetLayout(device, descriptorSetLayout, nullptr);
 
-		for (size_t i = 0; i < uniformBuffers.size(); ++i)
-			vmaDestroyBuffer(allocator, uniformBuffers[i], uniformBuffersMemory[i]);
+		vmaDestroyBuffer(allocator, uniformBuffer, uniformBuffersMemory);
 
 		vmaDestroyBuffer(allocator, vertexBuffer, vertexBufferAllocation);
 		vmaDestroyBuffer(allocator, indexBuffer, indexBufferAllocation);

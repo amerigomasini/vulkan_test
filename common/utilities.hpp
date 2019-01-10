@@ -19,6 +19,14 @@ struct Vertex
 	glm::vec2 texCoord;
 	glm::vec3 normal;
 
+	enum class VertexComponent
+	{
+		Position,
+		Color,
+		TextureUV,
+		Normal,
+	};
+
 	static VkVertexInputBindingDescription getBindingDescription()
 	{
 		VkVertexInputBindingDescription bindingInputDescription = {};
@@ -29,7 +37,7 @@ struct Vertex
 	}
 
 	//We have two attributes in Vertex, so we need two attribute descriptions
-	static std::array<VkVertexInputAttributeDescription, 4> getAttributeDescriptions()
+	static std::vector<VkVertexInputAttributeDescription> getAttributeDescriptions(std::vector<VertexComponent> const & requiredComponents)
 	{
 		/*
 		common formats:
@@ -42,27 +50,37 @@ struct Vertex
 		uvec4:	VK_FORMAT_R32G32B32A32_SUINT
 		*/
 
-		std::array<VkVertexInputAttributeDescription, 4> attributeDescriptions = {};
-
-		attributeDescriptions[0].binding = 0;							//array of referenced binding in binding array
-		attributeDescriptions[0].location = 0;							//location of attribute within selected binding
-		attributeDescriptions[0].format = VK_FORMAT_R32G32B32_SFLOAT;	//vec3 of floats
-		attributeDescriptions[0].offset = offsetof(Vertex, pos);		//offset of pos into the Vertex structure
-
-		attributeDescriptions[1].binding = 0;
-		attributeDescriptions[1].location = 1;
-		attributeDescriptions[1].format = VK_FORMAT_R32G32B32_SFLOAT;
-		attributeDescriptions[1].offset = offsetof(Vertex, color);
-
-		attributeDescriptions[2].binding = 0;
-		attributeDescriptions[2].location = 2;
-		attributeDescriptions[2].format = VK_FORMAT_R32G32_SFLOAT;
-		attributeDescriptions[2].offset = offsetof(Vertex, texCoord);
-
-		attributeDescriptions[3].binding = 0;
-		attributeDescriptions[3].location = 3;
-		attributeDescriptions[3].format = VK_FORMAT_R32G32B32_SFLOAT;
-		attributeDescriptions[3].offset = offsetof(Vertex, normal);
+		std::vector<VkVertexInputAttributeDescription> attributeDescriptions;
+		attributeDescriptions.resize(requiredComponents.size());
+		for (size_t i = 0; i < requiredComponents.size(); ++i)
+		{
+			attributeDescriptions[i].binding = 0;
+			attributeDescriptions[i].location = static_cast<uint32_t>(i);
+			
+			switch (requiredComponents[i])
+			{
+			case VertexComponent::Position:
+			{
+				attributeDescriptions[i].format = VK_FORMAT_R32G32B32_SFLOAT;
+				attributeDescriptions[i].offset = offsetof(Vertex, pos);
+			} break;
+			case VertexComponent::Color:
+			{
+				attributeDescriptions[i].format = VK_FORMAT_R32G32B32_SFLOAT;
+				attributeDescriptions[i].offset = offsetof(Vertex, color);
+			} break;
+			case VertexComponent::TextureUV:
+			{
+				attributeDescriptions[i].format = VK_FORMAT_R32G32_SFLOAT;
+				attributeDescriptions[i].offset = offsetof(Vertex, texCoord);
+			} break;
+			case VertexComponent::Normal:
+			{
+				attributeDescriptions[i].format = VK_FORMAT_R32G32B32_SFLOAT;
+				attributeDescriptions[i].offset = offsetof(Vertex, normal);
+			} break;
+			}
+		}
 
 		return attributeDescriptions;
 	}

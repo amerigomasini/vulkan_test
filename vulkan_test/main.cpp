@@ -860,7 +860,14 @@ private:
 		//Vertex Input
 		//Describes format of vertex data passed to Vertex Shader
 		auto bindingDescription = Vertex::getBindingDescription();
-		auto attributeDescription = Vertex::getAttributeDescriptions();
+		std::vector<Vertex::VertexComponent> requiredComponents = {
+			Vertex::VertexComponent::Position,
+			Vertex::VertexComponent::Color,
+			Vertex::VertexComponent::TextureUV,
+			Vertex::VertexComponent::Normal
+		};
+
+		auto attributeDescription = Vertex::getAttributeDescriptions(requiredComponents);
 		VkPipelineVertexInputStateCreateInfo vertexInputInfo = {};
 		vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
 		vertexInputInfo.vertexBindingDescriptionCount = 1;
