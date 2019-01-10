@@ -19,6 +19,8 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "simple_mm", "simple_with_me
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "compute_shader", "compute_shader\compute_shader.vcxproj", "{93083096-4481-46D6-8E49-5B82AB267E2F}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "shadow_maps", "shadow_maps\shadow_maps.vcxproj", "{FFFA127C-985B-422B-9405-A939FA96831D}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -91,6 +93,14 @@ Global
 		{93083096-4481-46D6-8E49-5B82AB267E2F}.Release|x64.Build.0 = Release|x64
 		{93083096-4481-46D6-8E49-5B82AB267E2F}.Release|x86.ActiveCfg = Release|Win32
 		{93083096-4481-46D6-8E49-5B82AB267E2F}.Release|x86.Build.0 = Release|Win32
+		{FFFA127C-985B-422B-9405-A939FA96831D}.Debug|x64.ActiveCfg = Debug|x64
+		{FFFA127C-985B-422B-9405-A939FA96831D}.Debug|x64.Build.0 = Debug|x64
+		{FFFA127C-985B-422B-9405-A939FA96831D}.Debug|x86.ActiveCfg = Debug|Win32
+		{FFFA127C-985B-422B-9405-A939FA96831D}.Debug|x86.Build.0 = Debug|Win32
+		{FFFA127C-985B-422B-9405-A939FA96831D}.Release|x64.ActiveCfg = Release|x64
+		{FFFA127C-985B-422B-9405-A939FA96831D}.Release|x64.Build.0 = Release|x64
+		{FFFA127C-985B-422B-9405-A939FA96831D}.Release|x86.ActiveCfg = Release|Win32
+		{FFFA127C-985B-422B-9405-A939FA96831D}.Release|x86.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
