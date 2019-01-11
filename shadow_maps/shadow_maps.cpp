@@ -785,7 +785,7 @@ private:
 		depthAttachment.format = findDepthFormat();
 		depthAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
 		depthAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-		depthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;		//Do not need depth info after the drawing has finished
+		depthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
 		depthAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
 		depthAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
 		depthAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
@@ -826,22 +826,26 @@ private:
 
 		//this dependencies assures that we do not try to access an image before it is available
 		//identifies a dependency between the source and the destination subpass
-		VkSubpassDependency dependency = {};
+		std::array<VkSubpassDependency, 2> dependencies;
 
-		//first synchronization scope includes commands executed before the current render pass
-		dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
-		//the synchronization scope is limited to this stage of the pipeline (after blending, before outputting to image)
-		dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-		dependency.srcAccessMask = 0;
+		dependencies[0].srcSubpass = VK_SUBPASS_EXTERNAL;
+		dependencies[0].dstSubpass = 0;
+		dependencies[0].srcStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+		dependencies[0].dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+		dependencies[0].srcAccessMask = VK_ACCESS_MEMORY_READ_BIT;
+		dependencies[0].dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+		dependencies[0].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
 
-		//second synchronization scope includes 0th subpass of the render pass
-		dependency.dstSubpass = 0;
-		//the synchronization scope is limited to this stage of the pipeline (after blending, before outputting to image)
-		dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-		dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+		dependencies[1].srcSubpass = 0;
+		dependencies[1].dstSubpass = VK_SUBPASS_EXTERNAL;
+		dependencies[1].srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+		dependencies[1].dstStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+		dependencies[1].srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+		dependencies[1].dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
+		dependencies[1].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
 
-		renderPassInfo.dependencyCount = 1;
-		renderPassInfo.pDependencies = &dependency;
+		renderPassInfo.dependencyCount = static_cast<uint32_t>(dependencies.size());
+		renderPassInfo.pDependencies = dependencies.data();
 
 		if (vkCreateRenderPass(device, &renderPassInfo, nullptr, &renderPass) != VK_SUCCESS)
 			throw std::runtime_error("failed to create render pass");
@@ -1228,7 +1232,7 @@ private:
 			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, offscreenImage, offscreenImageMemory);
 
 		offscreenImageView = createImageView(offscreenImage, depthFormat, VK_IMAGE_ASPECT_DEPTH_BIT);
-		transitionImageLayout(offscreenImage, depthFormat, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
+		//transitionImageLayout(offscreenImage, depthFormat, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
 
 		createTextureSampler();
 
@@ -1524,9 +1528,9 @@ private:
 	{
 		VkSamplerCreateInfo samplerInfo = {};
 		samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
-		samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-		samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-		samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+		samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+		samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+		samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
 		samplerInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;	//only relevant if address mode is border clamp
 
 		samplerInfo.magFilter = VK_FILTER_LINEAR;			//how to interpolate texels that are magnified (oversampling -> too many pixels per texel)
@@ -1842,7 +1846,7 @@ private:
 		VkDescriptorImageInfo imageInfo = {};
 		imageInfo.sampler = textureSampler;
 		imageInfo.imageView = offscreenImageView;
-		imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+		imageInfo.imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
 
 		writeDescriptorSet.dstBinding = 1;
 		writeDescriptorSet.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
@@ -1891,19 +1895,19 @@ private:
 		createDescriptorSetLayout();
 		createCommandPool();
 
-		//shadow specific
-		createOffscreenFramebuffer();
-
-		createGraphicsPipeline();
-		createDepthResources();
-		createFramebuffers();
-
 		Utilities::loadModel(MODEL_PATH, vertices, indices, meshes);
 		createVertexBuffers();
 		createIndexBuffers();
 		createUniformBuffers();
+		createDepthResources();
+		createFramebuffers();
+
 		createDescriptorPool();
+
+		createOffscreenFramebuffer();
 		createDescriptorSets();
+
+		createGraphicsPipeline();
 
 		createCommandBuffers();
 		createSynchObjects();
