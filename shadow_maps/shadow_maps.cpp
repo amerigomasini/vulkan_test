@@ -60,6 +60,7 @@ struct UniformBufferObject
 	glm::mat4 view;
 	glm::mat4 proj;
 	glm::vec4 lighPos = glm::vec4(0.0f, 2.0f, 1.0f, 0.0f);
+	glm::mat4 lightMVP;
 };
 
 struct LightUniformBufferObject
@@ -199,6 +200,8 @@ private:
 	VkDescriptorSetLayout offscreenDescriptorSetLayout;
 	VkBuffer offscreenUBO;
 	VmaAllocation offscreenUBOMemory;
+	VkCommandBuffer offscreenCommandBuffer;
+	VkSemaphore offscreenRenderingSemaphore;
 
 	std::vector<VkShaderModule> shaderModules;
 
@@ -689,6 +692,8 @@ private:
 		vkDestroyFramebuffer(device, offscreenFrameBuffer, nullptr);
 		vkDestroyRenderPass(device, offscreenRenderPass, nullptr);
 		vkDestroyPipeline(device, offscreenPipeline, nullptr);
+		vkDestroyPipelineLayout(device, offscreenPipelineLayout, nullptr);
+		vkFreeCommandBuffers(device, commandPool, 1, &offscreenCommandBuffer);
 
 		vkFreeCommandBuffers(device, commandPool, static_cast<uint32_t>(commandBuffers.size()), &commandBuffers[0]);
 
@@ -1102,7 +1107,11 @@ private:
 		vertexInputInfo.pVertexAttributeDescriptions = offscreenAttributeDescription.data();
 
 		rasterizer.depthBiasEnable = VK_TRUE;
+		rasterizer.depthBiasConstantFactor = 1.25f;
+		rasterizer.depthBiasSlopeFactor = 1.75f;
 		colorBlending.attachmentCount = 0;
+
+
 
 		pipelineInfo.layout = offscreenPipelineLayout;
 		pipelineInfo.renderPass = offscreenRenderPass;
@@ -1158,11 +1167,11 @@ private:
 		VkAttachmentDescription attachmentDescription = {};
 		attachmentDescription.format = findDepthFormat();
 		attachmentDescription.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-		attachmentDescription.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;			//at pass end will transition to shader read
+		attachmentDescription.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;			//at pass end will transition to shader read
 		attachmentDescription.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
 		attachmentDescription.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
 		attachmentDescription.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-		attachmentDescription.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+		attachmentDescription.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
 		attachmentDescription.samples = VK_SAMPLE_COUNT_1_BIT;
 
 		VkAttachmentReference depthAttachmentReference = {};
@@ -1179,12 +1188,14 @@ private:
 
 		std::vector<VkSubpassDependency> dependencies;
 		VkSubpassDependency startDependency = {};
-		startDependency.srcStageMask = VK_SUBPASS_EXTERNAL;
+		startDependency.srcSubpass = VK_SUBPASS_EXTERNAL;
 		startDependency.dstSubpass = 0;
 		startDependency.srcStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
 		startDependency.dstStageMask = VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
+		startDependency.srcAccessMask = 0;
 		startDependency.dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
 		startDependency.dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
+		dependencies.push_back(startDependency);
 
 		VkSubpassDependency endDependency = {};
 		endDependency.srcSubpass = 0;
@@ -1194,6 +1205,7 @@ private:
 		endDependency.srcAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
 		endDependency.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
 		endDependency.dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
+		dependencies.push_back(endDependency);
 
 		VkRenderPassCreateInfo renderPassInfo = {};
 		renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
@@ -1573,13 +1585,13 @@ private:
 			throw std::runtime_error("failed to allocate command buffers");
 
 
+		VkCommandBufferBeginInfo beginInfo = {};
+		beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+		beginInfo.flags = VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT;		//we will potentially use the command buffer while it is still executing previous commands
+		beginInfo.pInheritanceInfo = nullptr;								//only relevant for secondary command buffers
+
 		for (size_t i = 0; i < commandBuffers.size(); ++i)
 		{
-			VkCommandBufferBeginInfo beginInfo = {};
-			beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-			beginInfo.flags = VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT;		//we will potentially use the command buffer while it is still executing previous commands
-			beginInfo.pInheritanceInfo = nullptr;								//only relevant for secondary command buffers
-
 			if (vkBeginCommandBuffer(commandBuffers[i], &beginInfo) != VK_SUCCESS)
 				throw std::runtime_error("failed to begin recording command buffer");
 
@@ -1624,6 +1636,42 @@ private:
 				throw std::runtime_error("failed to record command buffer");
 
 		}
+
+
+
+		//create offscreen command buffer
+		allocInfo.commandBufferCount = 1;
+		if (vkAllocateCommandBuffers(device, &allocInfo, &offscreenCommandBuffer) != VK_SUCCESS)
+			throw std::runtime_error("failed to allocate offscreen command buffer");
+
+		if (vkBeginCommandBuffer(offscreenCommandBuffer, &beginInfo) != VK_SUCCESS)
+			throw std::runtime_error("failed to begin recording command buffer");
+
+		VkRenderPassBeginInfo renderPassInfo = {};
+		renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+		renderPassInfo.renderPass = offscreenRenderPass;
+		renderPassInfo.framebuffer = offscreenFrameBuffer;
+		renderPassInfo.renderArea.offset = { 0, 0 };
+		renderPassInfo.renderArea.extent = swapChainExtent;
+
+		std::array<VkClearValue, 1> clearValues = {};
+		clearValues[0].depthStencil = { 1.0f, 0 };			//clear the depth to 1 (the far plane)
+		renderPassInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
+		renderPassInfo.pClearValues = clearValues.data();
+
+		//start a render pass
+		vkCmdBeginRenderPass(offscreenCommandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+		vkCmdBindPipeline(offscreenCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, offscreenPipeline);
+		vkCmdBindDescriptorSets(offscreenCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, offscreenPipelineLayout, 0, 1, &descriptorSets[0], 0, nullptr);
+		VkBuffer vertexBuffers[] = { vertexBuffer };
+		VkDeviceSize offsets[] = { 0 };
+		vkCmdBindVertexBuffers(offscreenCommandBuffer, 0, 1, vertexBuffers, offsets);
+		vkCmdBindIndexBuffer(offscreenCommandBuffer, indexBuffer, 0, VK_INDEX_TYPE_UINT32);
+		vkCmdDrawIndexed(offscreenCommandBuffer, static_cast<uint32_t>(indices.size()), 1, 0, 0, 0);
+		vkCmdEndRenderPass(offscreenCommandBuffer);
+		if (vkEndCommandBuffer(offscreenCommandBuffer) != VK_SUCCESS)
+			throw std::runtime_error("failed to create offscreen command buffer");
 	}
 
 	VkCommandBuffer beginSingleTimeCommands()
@@ -1724,7 +1772,7 @@ private:
 				throw std::runtime_error("failed to create semaphores or fences");
 		}
 
-
+		vkCreateSemaphore(device, &semaphoreInfo, nullptr, &offscreenRenderingSemaphore);
 	}
 
 
@@ -1801,6 +1849,7 @@ private:
 		writeDescriptorSet.dstSet = descriptorSets[1];
 		writeDescriptorSet.pBufferInfo = nullptr;
 		writeDescriptorSet.pImageInfo = &imageInfo;
+		descriptorWrites.push_back(writeDescriptorSet);
 
 		vkUpdateDescriptorSets(device, static_cast<uint32_t>(descriptorWrites.size()), descriptorWrites.data(), 0, nullptr);
 	}
@@ -1823,7 +1872,7 @@ private:
 		glfwSetWindowUserPointer(window, this);
 		glfwSetFramebufferSizeCallback(window, framebufferResizeCallback);
 		glfwSetInputMode(window, GLFW_STICKY_KEYS, VK_TRUE);
-		//glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+		glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 		glfwPollEvents();
 		glfwSetCursorPos(window, WIDTH / 2, HEIGHT / 2);
 	}
@@ -1871,7 +1920,7 @@ private:
 	float speed = 10.0f; // 10 units / second
 	float mouseSpeed = 0.005f;
 
-	void updateUniformBuffer(uint32_t)
+	void updateUniformBuffer(glm::mat4 const & lightMVP)
 	{
 		// glfwGetTime is called only once, the first time this function is called
 		static double lastTime = glfwGetTime();
@@ -1885,7 +1934,7 @@ private:
 		glfwGetCursorPos(window, &xpos, &ypos);
 
 		// Reset mouse position for next frame
-		//glfwSetCursorPos(window, swapChainExtent.width / 2, swapChainExtent.height / 2);
+		glfwSetCursorPos(window, swapChainExtent.width / 2, swapChainExtent.height / 2);
 
 		UniformBufferObject ubo = {};
 
@@ -1945,6 +1994,8 @@ private:
 
 		ubo.model = glm::mat4(1.0f);
 
+		ubo.lightMVP = lightMVP;
+
 		// For the next frame, the "last time" will be "now"
 		lastTime = currentTime;
 
@@ -1955,6 +2006,44 @@ private:
 		vmaMapMemory(allocator, uniformBuffersMemory, &data);
 		memcpy(data, &ubo, sizeof(ubo));
 		vmaUnmapMemory(allocator, uniformBuffersMemory);
+	}
+
+	glm::vec3 lightPosition = glm::vec3();
+
+	glm::mat4 updateLightUniformBuffer()
+	{
+		static auto startTime = std::chrono::high_resolution_clock::now();
+
+		auto currentTime = std::chrono::high_resolution_clock::now();
+		float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
+
+		// Animate the light source
+		lightPosition.x = cos(glm::radians(time * 360.0f / 10.0f)) * 40.0f;
+		lightPosition.y = -50.0f + sin(glm::radians(time * 360.0f / 10.0f)) * 20.0f;
+		lightPosition.z = 25.0f + sin(glm::radians(time * 360.0f / 10.0f)) * 5.0f;
+
+// 		lightPosition.x = 0.0f;
+// 		lightPosition.y = -50.0f;
+// 		lightPosition.z = 25.0f;
+
+		LightUniformBufferObject ubo = {};
+		glm::mat4 model = glm::mat4(1.0f);
+		glm::mat4 view = glm::lookAt(lightPosition, glm::vec3(0.0f), glm::vec3(0, -1, 0));
+		glm::mat4 proj = glm::perspective(glm::radians(45.0f), swapChainExtent.width / (float)swapChainExtent.height, 1.0f, 100.0f);
+
+		//need to flip the Y axis, since the Y axis in Vulkan is inverted with respect to OpenGL, for which glm was designed
+		proj[1][1] *= -1;
+
+		ubo.lightMVP = proj * view * model;
+
+
+
+		void * data;
+		vmaMapMemory(allocator, offscreenUBOMemory, &data);
+		memcpy(data, &ubo, sizeof(ubo));
+		vmaUnmapMemory(allocator, offscreenUBOMemory);
+
+		return ubo.lightMVP;
 	}
 
 	void drawFrame()
@@ -1980,26 +2069,29 @@ private:
 		else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR)
 			throw std::runtime_error("failed to acquire swap chain image");
 
-		updateUniformBuffer(imageIndex);
+		
+		glm::mat4 ligthMVP = updateLightUniformBuffer();
+		updateUniformBuffer(ligthMVP);
 
 		VkSubmitInfo submitInfo = {};
 		submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-
-		//wait for the image to become available before the the pipeline reaches a point where it needs to output to it
-		//these are parallel arrays
-		VkSemaphore waitSemaphore[] = { imageAvailableSemaphores[currentFrame] };
-		VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };	//which pipeline stage should wait
 		submitInfo.waitSemaphoreCount = 1;
-		submitInfo.pWaitSemaphores = waitSemaphore;
+		submitInfo.pWaitSemaphores = &imageAvailableSemaphores[currentFrame];
+		submitInfo.signalSemaphoreCount = 1;
+		submitInfo.pSignalSemaphores = &offscreenRenderingSemaphore;
+		submitInfo.commandBufferCount = 1;
+		submitInfo.pCommandBuffers = &offscreenCommandBuffer;
+		VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };	//which pipeline stage should wait
 		submitInfo.pWaitDstStageMask = waitStages;
 
+		if (vkQueueSubmit(graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE) != VK_SUCCESS)
+			throw std::runtime_error("failed to submit offscreen commands");
+		
+		submitInfo.pWaitSemaphores = &offscreenRenderingSemaphore;
 		//the command buffers to execute with this submission
-		submitInfo.commandBufferCount = 1;
 		submitInfo.pCommandBuffers = &commandBuffers[imageIndex];
-
 		//which semaphores to signal once the command buffers have finished executing
 		VkSemaphore signalSemaphore[] = { renderFinishedSemaphores[currentFrame] };
-		submitInfo.signalSemaphoreCount = 1;
 		submitInfo.pSignalSemaphores = signalSemaphore;
 
 		//Reset fences, they are now unlocked
@@ -2056,6 +2148,7 @@ private:
 		vkDestroyDescriptorPool(device, descriptorPool, nullptr);
 		vkDestroyDescriptorSetLayout(device, descriptorSetLayout, nullptr);
 
+		vmaDestroyBuffer(allocator, offscreenUBO, offscreenUBOMemory);
 		vmaDestroyBuffer(allocator, uniformBuffer, uniformBuffersMemory);
 
 		vmaDestroyBuffer(allocator, vertexBuffer, vertexBufferAllocation);
@@ -2067,6 +2160,7 @@ private:
 			vkDestroySemaphore(device, renderFinishedSemaphores[i], nullptr);
 			vkDestroyFence(device, inFlightFences[i], nullptr);
 		}
+		vkDestroySemaphore(device, offscreenRenderingSemaphore, nullptr);
 
 		for (auto shaderModule : shaderModules)
 			vkDestroyShaderModule(device, shaderModule, nullptr);

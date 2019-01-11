@@ -5,6 +5,7 @@ layout(binding = 0) uniform UniformBufferObject {
 	mat4 model;
 	mat4 view;
 	mat4 proj;
+	mat4 lightMVP;
 	vec4 lightPos;
 } ubo;
 
@@ -18,6 +19,13 @@ layout(location = 1) out vec2 fragtexCoord;
 layout(location = 2) out vec3 fragViewVec;
 layout(location = 3) out vec3 fragLightVec;
 layout(location = 4) out vec3 fragNormal;
+layout(location = 5) out vec4 outShadowCoord;
+
+const mat4 biasMat = mat4( 
+	0.5, 0.0, 0.0, 0.0,
+	0.0, 0.5, 0.0, 0.0,
+	0.0, 0.0, 1.0, 0.0,
+	0.5, 0.5, 0.0, 1.0 );
 
 
 void main() {
@@ -31,4 +39,6 @@ void main() {
 	vec3 lPos = mat3(ubo.view * ubo.model) * ubo.lightPos.xyz;
 	fragLightVec = lPos - pos.xyz;
 	fragViewVec = -pos.xyz;
+
+	outShadowCoord = ( biasMat * ubo.lightMVP * ubo.model ) * vec4(inPosition, 1.0);	
 }
