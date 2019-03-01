@@ -21,6 +21,8 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "compute_shader", "compute_s
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "shadow_maps", "shadow_maps\shadow_maps.vcxproj", "{FFFA127C-985B-422B-9405-A939FA96831D}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "deinterleaved_vertices_mm", "deinterleaved_vertices\deinterleaved_vertices_mm.vcxproj", "{E866D8BF-9887-4A0A-82AD-28901E9A7F98}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -101,6 +103,14 @@ Global
 		{FFFA127C-985B-422B-9405-A939FA96831D}.Release|x64.Build.0 = Release|x64
 		{FFFA127C-985B-422B-9405-A939FA96831D}.Release|x86.ActiveCfg = Release|Win32
 		{FFFA127C-985B-422B-9405-A939FA96831D}.Release|x86.Build.0 = Release|Win32
+		{E866D8BF-9887-4A0A-82AD-28901E9A7F98}.Debug|x64.ActiveCfg = Debug|x64
+		{E866D8BF-9887-4A0A-82AD-28901E9A7F98}.Debug|x64.Build.0 = Debug|x64
+		{E866D8BF-9887-4A0A-82AD-28901E9A7F98}.Debug|x86.ActiveCfg = Debug|Win32
+		{E866D8BF-9887-4A0A-82AD-28901E9A7F98}.Debug|x86.Build.0 = Debug|Win32
+		{E866D8BF-9887-4A0A-82AD-28901E9A7F98}.Release|x64.ActiveCfg = Release|x64
+		{E866D8BF-9887-4A0A-82AD-28901E9A7F98}.Release|x64.Build.0 = Release|x64
+		{E866D8BF-9887-4A0A-82AD-28901E9A7F98}.Release|x86.ActiveCfg = Release|Win32
+		{E866D8BF-9887-4A0A-82AD-28901E9A7F98}.Release|x86.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
